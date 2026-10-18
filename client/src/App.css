@@ -1,0 +1,21 @@
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #fafafa;
+  color: #222;
+}
+
+.app {
+  max-width: 640px;
+  margin: 4rem auto;
+  padding: 0 1rem;
+}
+
+.status {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+}
+
+.status-checking { background: #eee; }
+.status-ok { background: #e3f4e6; }
+.status-error { background: #fbe4e4; }

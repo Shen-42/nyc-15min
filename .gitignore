@@ -1,0 +1,19 @@
+# Node
+node_modules/
+client/dist/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Data files built later (card 3 and 5). Rebuild them with scripts instead of committing.
+server/data/*.graphml
+server/data/*.json
+
+# Editor and OS
+.vscode/
+.idea/
+.DS_Store
+.env
