@@ -10,7 +10,7 @@ import L from "leaflet";
 import {
   MANHATTAN_CENTER,
   MANHATTAN_BOUNDS,
-  MANHATTAN_OUTLINE,
+  MANHATTAN_POLYGONS,
   OUTER_RING,
   COMING_SOON_LABELS,
 } from "../data/manhattan";
@@ -54,7 +54,7 @@ export default function ManhattanMap({ selectedPoint, onMapClick }) {
 
       {/* Gray mask over everything except Manhattan */}
       <Polygon
-        positions={[OUTER_RING, MANHATTAN_OUTLINE]}
+        positions={[OUTER_RING, ...MANHATTAN_POLYGONS]}
         pathOptions={{ color: "#666", weight: 1, fillColor: "#333", fillOpacity: 0.35 }}
         interactive={false}
       />
