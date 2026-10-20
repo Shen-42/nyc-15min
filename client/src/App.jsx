@@ -1,33 +1,56 @@
 import { useEffect, useState } from "react";
+import ManhattanMap from "./components/ManhattanMap";
+import { isInManhattan } from "./data/manhattan";
 
-// Card 1 check: the React app calls the back end's /api/health route
-// and shows whether it answered. Card 2 replaces this with the map.
 export default function App() {
-  const [status, setStatus] = useState("checking");
-  const [detail, setDetail] = useState("");
+  const [serverStatus, setServerStatus] = useState("checking");
+  const [selectedPoint, setSelectedPoint] = useState(null);
+  const [notice, setNotice] = useState("Click anywhere in Manhattan.");
 
+  // Same health check as card 1, now a small status line.
   useEffect(() => {
     fetch("/api/health")
       .then((res) => {
-        if (!res.ok) throw new Error(`Server returned ${res.status}`);
-        return res.json();
+        if (!res.ok) throw new Error();
+        setServerStatus("ok");
       })
-      .then((data) => {
-        setStatus("ok");
-        setDetail(`Server says: ${data.status} (version ${data.version})`);
-      })
-      .catch((err) => {
-        setStatus("error");
-        setDetail(`Could not reach the server: ${err.message}`);
-      });
+      .catch(() => setServerStatus("error"));
   }, []);
 
+  function handleMapClick(point) {
+    if (isInManhattan(point)) {
+      setSelectedPoint(point);
+      setNotice("");
+    } else {
+      setSelectedPoint(null);
+      setNotice("Only Manhattan is available for now.");
+    }
+  }
+
   return (
-    <main className="app">
-      <h1>NYC 15-Minute City Explorer</h1>
-      <p className={`status status-${status}`}>
-        {status === "checking" ? "Checking server..." : detail}
-      </p>
-    </main>
+    <div className="layout">
+      <aside className="panel">
+        <h1>NYC 15-Minute City Explorer</h1>
+
+        {selectedPoint ? (
+          <dl className="coords">
+            <dt>Latitude</dt>
+            <dd>{selectedPoint[0].toFixed(5)}</dd>
+            <dt>Longitude</dt>
+            <dd>{selectedPoint[1].toFixed(5)}</dd>
+          </dl>
+        ) : (
+          <p className="notice">{notice}</p>
+        )}
+
+        <p className={`server server-${serverStatus}`}>
+          {serverStatus === "checking" && "Checking server..."}
+          {serverStatus === "ok" && "Server connected"}
+          {serverStatus === "error" && "Server not reachable. Is uvicorn running?"}
+        </p>
+      </aside>
+
+      <ManhattanMap selectedPoint={selectedPoint} onMapClick={handleMapClick} />
+    </div>
   );
 }

@@ -1,21 +1,73 @@
+* { box-sizing: border-box; }
+
 body {
   margin: 0;
   font-family: system-ui, sans-serif;
-  background: #fafafa;
   color: #222;
 }
 
-.app {
-  max-width: 640px;
-  margin: 4rem auto;
-  padding: 0 1rem;
+.layout {
+  display: flex;
+  height: 100vh;
 }
 
-.status {
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
+.panel {
+  width: 300px;
+  padding: 1.25rem;
+  border-right: 1px solid #ddd;
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
-.status-checking { background: #eee; }
-.status-ok { background: #e3f4e6; }
-.status-error { background: #fbe4e4; }
+.panel h1 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.map {
+  flex: 1;
+  height: 100%;
+}
+
+.notice { color: #555; margin: 0; }
+
+.coords {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0;
+}
+.coords dt { color: #555; }
+.coords dd { margin: 0; font-family: ui-monospace, monospace; }
+
+.server {
+  margin-top: auto;
+  font-size: 0.85rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+}
+.server-checking { background: #eee; }
+.server-ok { background: #e3f4e6; }
+.server-error { background: #fbe4e4; }
+
+.borough-label {
+  text-align: center;
+  font-weight: 600;
+  font-size: 13px;
+  color: #fff;
+  text-shadow: 0 0 3px #000;
+  line-height: 1.2;
+}
+.borough-label span {
+  font-weight: 400;
+  font-size: 11px;
+}
+
+/* Phones: panel on top, map below */
+@media (max-width: 700px) {
+  .layout { flex-direction: column; }
+  .panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; }
+  .map { height: auto; }
+}
