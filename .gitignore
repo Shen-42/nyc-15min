@@ -8,9 +8,9 @@ __pycache__/
 .venv/
 .pytest_cache/
 
-# Data files built later (card 3 and 5). Rebuild them with scripts instead of committing.
-server/data/*.graphml
-server/data/*.json
+# OSMnx download cache. The built graph in server/data/ IS committed,
+# so teammates and the deployed server don't have to rebuild it.
+cache/
 
 # Editor and OS
 .vscode/

@@ -36,6 +36,19 @@ npm run dev
 
 Open http://localhost:5173. A green box saying "Server says: ok" means the two halves are talking. A red box means the back end is not running.
 
+## Build the walking graph (once)
+
+The server needs `server/data/walk_graph.json`, Manhattan's walkable streets from OpenStreetMap. It's committed to the repo, so you only need to rebuild it to get newer map data.
+
+```bash
+cd server
+source .venv/bin/activate
+pip install -r requirements-build.txt
+python scripts/build_graph.py
+```
+
+Check it with the server running: http://localhost:8000/api/graph/info and http://localhost:8000/api/nearest-node?lat=40.758&lng=-73.9855
+
 ## Tests
 
 ```bash
