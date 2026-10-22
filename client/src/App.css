@@ -71,3 +71,11 @@ body {
   .panel { width: 100%; border-right: none; border-bottom: 1px solid #ddd; }
   .map { height: auto; }
 }
+
+.warn {
+  background: #fff4d6;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  color: #6b4e00;
+}
+.warn code { font-size: 0.85em; }

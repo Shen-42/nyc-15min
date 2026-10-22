@@ -5,11 +5,15 @@ segments between them, with a length in meters. Walking works both ways, so
 every edge is added in both directions.
 """
 
+import heapq  # priority queue for Dijkstra
 import json
 import math
 from pathlib import Path
 
 EARTH_RADIUS_M = 6_371_000
+
+# Average walking pace: 80 meters per minute is about 3 mph or 4.8 km/h.
+WALK_SPEED_M_PER_MIN = 80
 
 
 def distance_m(lat1, lng1, lat2, lng2):
@@ -23,14 +27,22 @@ def distance_m(lat1, lng1, lat2, lng2):
 
 class WalkGraph:
     def __init__(self, nodes, edges):
-        """nodes: list of [id, lat, lng]. edges: list of [node_a, node_b, length_m]."""
+        """nodes: list of [id, lat, lng].
+        edges: list of [node_a, node_b, length_m], optionally followed by the
+        [lat, lng] points along a curved path from node_a to node_b.
+        """
         self.coords = {node_id: (lat, lng) for node_id, lat, lng in nodes}
         # Adjacency list: node id -> list of (neighbor id, length in meters).
         self.adj = {node_id: [] for node_id in self.coords}
-        for a, b, length in edges:
+        # Points along curved paths, only used for drawing: (a, b) -> [[lat, lng], ...]
+        self.shapes = {}
+        for a, b, length, *between in edges:
             self.adj[a].append((b, length))
             self.adj[b].append((a, length))
+            if between:
+                self.shapes[(a, b)] = between[0]
         self.edge_count = len(edges)
+        self.meta = {}
 
     @classmethod
     def from_file(cls, path):
@@ -46,6 +58,16 @@ class WalkGraph:
         """List of (neighbor id, length in meters). Card 4's Dijkstra uses this."""
         return self.adj[node_id]
 
+    def edge_points(self, a, b):
+        """The path from node a to node b as (lat, lng) points, both ends included."""
+        if (a, b) in self.shapes:
+            between = self.shapes[(a, b)]
+        elif (b, a) in self.shapes:
+            between = self.shapes[(b, a)][::-1]
+        else:
+            between = []
+        return [self.coords[a], *(tuple(p) for p in between), self.coords[b]]
+
     def nearest_node(self, lat, lng):
         """Return (node id, distance in meters) of the node closest to a point.
 
@@ -58,3 +80,50 @@ class WalkGraph:
             if d < best_dist:
                 best_id, best_dist = node_id, d
         return best_id, best_dist
+
+    def reachable_within(self, start, max_minutes):
+        """Every node you can walk to from `start` within `max_minutes`.
+
+        Returns a dict {node_id: minutes to walk there}, including the start
+        node at 0. Nodes farther than max_minutes are left out.
+
+        This is Dijkstra's algorithm with a cutoff. One way to write it:
+
+        1. Make a priority queue as a plain list and push (0, start) onto it.
+           heapq.heappush(queue, item) adds an item and heapq.heappop(queue)
+           removes the item with the smallest first value. Tuples compare by
+           their first value, so (minutes, node) pops the closest node first.
+        2. Make a dict `best` that holds the shortest time found so far for
+           each node. Set best[start] = 0.
+        3. While the queue isn't empty:
+             a. Pop (minutes, node).
+             b. If minutes > best[node], skip this entry. It's an old one,
+                pushed before a shorter route to the same node was found.
+             c. For each (neighbor, length_m) in self.neighbors(node):
+                  new_minutes = minutes + length_m / WALK_SPEED_M_PER_MIN
+                  If new_minutes > max_minutes, skip it: too far.
+                  If neighbor isn't in best, or new_minutes < best[neighbor],
+                  set best[neighbor] = new_minutes and push it onto the queue.
+        4. Return best.
+
+        Run `pytest test_reachable.py` to check it.
+        """
+        queue = [(0, start)]  # (minutes, node), closest first
+        best = {start: 0}  # shortest known time to each node
+
+        while queue:
+            minutes, node = heapq.heappop(queue)
+
+            # A shorter route to this node was found after this entry was pushed.
+            if minutes > best[node]:
+                continue
+
+            for neighbor, length_m in self.neighbors(node):
+                new_minutes = minutes + length_m / WALK_SPEED_M_PER_MIN
+                if new_minutes > max_minutes:
+                    continue  # too far
+                if neighbor not in best or new_minutes < best[neighbor]:
+                    best[neighbor] = new_minutes
+                    heapq.heappush(queue, (new_minutes, neighbor))
+
+        return best

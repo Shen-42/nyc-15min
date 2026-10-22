@@ -4,6 +4,7 @@ import {
   Polygon,
   CircleMarker,
   Marker,
+  GeoJSON,
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
@@ -36,7 +37,7 @@ function ClickHandler({ onMapClick }) {
   return null;
 }
 
-export default function ManhattanMap({ selectedPoint, onMapClick }) {
+export default function ManhattanMap({ selectedPoint, area, onMapClick }) {
   return (
     <MapContainer
       className="map"
@@ -62,6 +63,17 @@ export default function ManhattanMap({ selectedPoint, onMapClick }) {
       {labelIcons.map((b) => (
         <Marker key={b.name} position={b.position} icon={b.icon} interactive={false} />
       ))}
+
+      {/* The 15-minute walking area. GeoJSON doesn't redraw when its data
+          changes, so a new key forces a fresh layer for each new area. */}
+      {area && (
+        <GeoJSON
+          key={JSON.stringify(selectedPoint)}
+          data={area}
+          style={{ color: "#1f6feb", weight: 2, fillColor: "#1f6feb", fillOpacity: 0.2 }}
+          interactive={false}
+        />
+      )}
 
       {selectedPoint && (
         <CircleMarker

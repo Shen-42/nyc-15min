@@ -75,15 +75,27 @@ def main():
 
     # OSMnx stores a two-way path as two edges (A to B and B to A), and there can
     # be more than one path between the same two nodes. Walking works both ways,
-    # so store each pair once with its shortest length in meters.
-    lengths = {}
+    # so store each pair once, keeping the shortest.
+    #
+    # OSMnx also merges the points along a curved path into one edge and keeps
+    # the curve in a "geometry" attribute, running from u to v. Save the points
+    # in between so the map can draw the real path, not a straight line.
+    best = {}
     for u, v, d in G.edges(data=True):
         if u == v:
             continue
         key = (min(u, v), max(u, v))
-        if key not in lengths or d["length"] < lengths[key]:
-            lengths[key] = d["length"]
-    edges = [[int(u), int(v), round(length, 1)] for (u, v), length in lengths.items()]
+        if key not in best or d["length"] < best[key][0]:
+            geom = d.get("geometry")
+            between = [[round(y, 6), round(x, 6)] for x, y in geom.coords[1:-1]] if geom is not None else []
+            best[key] = (d["length"], u, v, between)
+
+    edges = []
+    for length, u, v, between in best.values():
+        edge = [int(u), int(v), round(length, 1)]
+        if between:
+            edge.append(between)  # [[lat, lng], ...] from u to v, ends left out
+        edges.append(edge)
 
     OUTPUT_FILE.parent.mkdir(exist_ok=True)
     OUTPUT_FILE.write_text(
@@ -97,7 +109,7 @@ def main():
                     "edge_count": len(edges),
                 },
                 "nodes": nodes,  # [id, lat, lng]
-                "edges": edges,  # [node_a, node_b, length_m]
+                "edges": edges,  # [node_a, node_b, length_m, optional points between]
             },
             separators=(",", ":"),
         )

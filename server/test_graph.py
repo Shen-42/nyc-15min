@@ -28,6 +28,17 @@ def test_edges_go_both_ways():
     assert len(g.neighbors(2)) == 2
 
 
+def test_edge_points_follow_the_curve_both_ways():
+    # A curved path from 1 to 2 with one point in between.
+    g = WalkGraph(
+        [[1, 40.7500, -73.9900], [2, 40.7510, -73.9900]],
+        [[1, 2, 150.0, [[40.7505, -73.9895]]]],
+    )
+    assert g.edge_points(1, 2) == [(40.75, -73.99), (40.7505, -73.9895), (40.751, -73.99)]
+    assert g.edge_points(2, 1) == [(40.751, -73.99), (40.7505, -73.9895), (40.75, -73.99)]
+    assert g.neighbors(1) == [(2, 150.0)]
+
+
 def test_nearest_node_small_graph():
     g = WalkGraph(SMALL_NODES, SMALL_EDGES)
     node_id, dist = g.nearest_node(40.7512, -73.9901)
