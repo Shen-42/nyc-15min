@@ -9,7 +9,10 @@ services:
     plan: free
     rootDir: server
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    # --proxy-headers/--forwarded-allow-ips: requests reach the app through
+    # Render's proxy, so read the visitor's real IP from the header it adds.
+    # The rate limit in main.py counts searches per visitor IP.
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION

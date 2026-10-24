@@ -50,13 +50,14 @@ export default function App() {
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         // 422: the server turned the click away (water, no path nearby) and says why.
+        // 429: too many searches in a minute.
         // 501: the search function isn't written yet.
-        const text =
-          res.status === 422 || res.status === 501
-            ? body.detail
-            : `The search failed (${body.detail ?? `error ${res.status}`}). Try another spot.`;
+        const explained = [422, 429, 501].includes(res.status);
+        const text = explained
+          ? body.detail
+          : `The search failed (${body.detail ?? `error ${res.status}`}). Try another spot.`;
         setResult(null);
-        setMessage({ kind: res.status === 422 ? "warn" : "error", text });
+        setMessage({ kind: res.status === 422 || res.status === 429 ? "warn" : "error", text });
         setStatus("done");
         return;
       }

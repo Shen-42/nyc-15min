@@ -6,11 +6,13 @@ Run from this folder with:
 
 import os
 import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from shapely.geometry import Point
 from shapely.ops import unary_union
 
@@ -64,7 +66,21 @@ async def lifespan(app):
     yield
 
 
-app = FastAPI(title="NYC 15-Minute City Explorer API", version="0.1.0", lifespan=lifespan)
+# Render sets RENDER=true on its servers. There, the interactive API docs
+# at /docs are turned off: nobody needs them, and they map out the API.
+ON_RENDER = os.environ.get("RENDER") == "true"
+
+app = FastAPI(
+    title="NYC 15-Minute City Explorer API",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url=None if ON_RENDER else "/docs",
+    redoc_url=None if ON_RENDER else "/redoc",
+    openapi_url=None if ON_RENDER else "/openapi.json",
+)
+
+# Compress responses over 1 KB. A search result shrinks to about a quarter.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # On Render the site and the API have different addresses, so the browser
 # needs permission to call the API from the site. ALLOWED_ORIGINS lists the
@@ -113,14 +129,37 @@ def nearest_node(
     return {"node_id": node_id, "lat": node_lat, "lng": node_lng, "distance_m": round(dist, 1)}
 
 
+# Rate limit: each visitor (by IP address) gets SEARCHES_PER_MINUTE searches
+# a minute. Normal clicking stays far below it; a script hammering the API
+# gets a 429 instead of using up the server and Render's free bandwidth.
+SEARCHES_PER_MINUTE = 30
+recent_searches = defaultdict(deque)  # IP -> times of its recent searches
+
+
+def check_rate_limit(ip):
+    now = time.monotonic()
+    times = recent_searches[ip]
+    while times and now - times[0] > 60:
+        times.popleft()
+    if len(times) >= SEARCHES_PER_MINUTE:
+        raise HTTPException(status_code=429, detail="Too many searches in a minute. Wait a moment and try again.")
+    times.append(now)
+    # Forget visitors who have gone quiet, so the table doesn't grow forever.
+    if len(recent_searches) > 10_000:
+        for old_ip in [k for k, v in recent_searches.items() if not v or now - v[-1] > 60]:
+            del recent_searches[old_ip]
+
+
 @app.get("/api/reachable")
 def reachable(
+    request: Request,
     response: Response,
     lat: float = Query(..., ge=40.6, le=40.95),
     lng: float = Query(..., ge=-74.1, le=-73.85),
     minutes: float = Query(15, gt=0, le=30),
 ):
     """Every graph node you can walk to from a clicked point within `minutes`."""
+    check_rate_limit(request.client.host if request.client else "unknown")
     graph = require_graph()
     timer = StepTimer()
 
@@ -150,10 +189,6 @@ def reachable(
     timer.lap("search")
 
     offset = minutes - budget
-    points = [
-        [*graph.coords[node], round(t + offset, 2)]
-        for node, t in times.items()
-    ]
     start_lat, start_lng = graph.coords[start]
     area = walking_area(graph, start, times, budget, WALK_SPEED_M_PER_MIN, land)
     timer.lap("area")
@@ -168,7 +203,6 @@ def reachable(
     return {
         "start": {"node_id": start, "lat": start_lat, "lng": start_lng, "distance_m": round(gap_m, 1)},
         "minutes": minutes,
-        "points": points,  # [lat, lng, minutes to walk there]
         "area": area,  # GeoJSON geometry
         "amenities": reached,  # closest first
         "score": score,

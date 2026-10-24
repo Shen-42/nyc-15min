@@ -8,12 +8,17 @@ every edge is added in both directions.
 import heapq  # priority queue for Dijkstra
 import json
 import math
+from collections import defaultdict
 from pathlib import Path
 
 EARTH_RADIUS_M = 6_371_000
 
 # Average walking pace: 80 meters per minute is about 3 mph or 4.8 km/h.
 WALK_SPEED_M_PER_MIN = 80
+
+# Size of one grid cell for the nearest-node index, in degrees.
+# 0.002 degrees is about 220 m north-south and 170 m east-west in Manhattan.
+GRID_DEG = 0.002
 
 
 def distance_m(lat1, lng1, lat2, lng2):
@@ -44,6 +49,13 @@ class WalkGraph:
         self.edge_count = len(edges)
         self.meta = {}
 
+        # Spatial index: the map is cut into GRID_DEG squares, and each square
+        # lists the nodes inside it. nearest_node then only checks the squares
+        # around a point instead of all ~37,000 nodes.
+        self.grid = defaultdict(list)
+        for node_id, (lat, lng) in self.coords.items():
+            self.grid[self._cell(lat, lng)].append(node_id)
+
     @classmethod
     def from_file(cls, path):
         data = json.loads(Path(path).read_text())
@@ -68,17 +80,37 @@ class WalkGraph:
             between = []
         return [self.coords[a], *(tuple(p) for p in between), self.coords[b]]
 
+    @staticmethod
+    def _cell(lat, lng):
+        return (math.floor(lat / GRID_DEG), math.floor(lng / GRID_DEG))
+
     def nearest_node(self, lat, lng):
         """Return (node id, distance in meters) of the node closest to a point.
 
-        Checks every node, which takes a few milliseconds for Manhattan.
-        A grid or k-d tree would be faster if it ever matters.
+        Searches the grid in growing square rings around the point's cell:
+        first the cell itself, then the 8 around it, then the 16 around those.
+        Any node outside ring r is at least r cells away, so once the best
+        node found is closer than r cells, no farther ring can beat it.
         """
+        ci, cj = self._cell(lat, lng)
+        # Meters per cell in the narrower direction (east-west), so the
+        # stopping rule never stops too early.
+        cell_m = GRID_DEG * 111_320 * math.cos(math.radians(lat))
         best_id, best_dist = None, math.inf
-        for node_id, (node_lat, node_lng) in self.coords.items():
-            d = distance_m(lat, lng, node_lat, node_lng)
-            if d < best_dist:
-                best_id, best_dist = node_id, d
+        max_ring = 200  # about 35 km: farther than anything in Manhattan
+
+        for r in range(max_ring + 1):
+            for i in range(ci - r, ci + r + 1):
+                for j in range(cj - r, cj + r + 1):
+                    if max(abs(i - ci), abs(j - cj)) != r:
+                        continue  # inner rings were already checked
+                    for node_id in self.grid.get((i, j), ()):
+                        node_lat, node_lng = self.coords[node_id]
+                        d = distance_m(lat, lng, node_lat, node_lng)
+                        if d < best_dist:
+                            best_id, best_dist = node_id, d
+            if best_id is not None and best_dist <= r * cell_m:
+                break
         return best_id, best_dist
 
     def reachable_within(self, start, max_minutes):

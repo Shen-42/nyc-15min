@@ -19,7 +19,11 @@ from shapely.ops import unary_union
 BUFFER_M = 40
 
 # Straighten the outline to within this many meters, to send fewer points.
-SIMPLIFY_M = 3
+SIMPLIFY_M = 5
+
+# Points used to round each corner of a widened street (per quarter circle).
+# 2 is enough at street scale and keeps the shape light to build and send.
+QUAD_SEGS = 2
 
 M_PER_DEG_LAT = 110_540
 
@@ -88,10 +92,10 @@ def walking_area(graph, start, times, max_minutes, speed_m_per_min, land=None):
         # Widen each segment on its own, then merge them all at once.
         # Buffering one big MultiLineString does the same thing but is much
         # slower, because it works out every crossing between segments first.
-        widened = shapely.buffer([LineString(s) for s in segments], BUFFER_M, quad_segs=4)
+        widened = shapely.buffer([LineString(s) for s in segments], BUFFER_M, quad_segs=QUAD_SEGS)
         lines = shapely.union_all(widened)
     else:
-        lines = Point(0, 0).buffer(BUFFER_M)
+        lines = Point(0, 0).buffer(BUFFER_M, quad_segs=QUAD_SEGS)
 
     lines = fill_holes(lines).simplify(SIMPLIFY_M)
 

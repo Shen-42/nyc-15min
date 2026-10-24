@@ -75,3 +75,16 @@ def test_known_places_are_near_a_node(manhattan, name):
     node_id, dist = manhattan.nearest_node(lat, lng)
     assert dist < 75, f"{name}: nearest node is {dist:.0f} m away"
     assert len(manhattan.neighbors(node_id)) > 0
+
+
+@needs_graph
+def test_grid_finds_the_same_node_as_checking_every_node(manhattan):
+    import random
+
+    random.seed(0)
+    for _ in range(200):
+        lat = random.uniform(40.70, 40.88)
+        lng = random.uniform(-74.02, -73.91)
+        best = min(manhattan.coords, key=lambda n: distance_m(lat, lng, *manhattan.coords[n]))
+        node, dist = manhattan.nearest_node(lat, lng)
+        assert dist == pytest.approx(distance_m(lat, lng, *manhattan.coords[best]))
