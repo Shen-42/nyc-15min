@@ -78,7 +78,9 @@ export default function ManhattanMap({ selectedPoint, area, areaKey, places, onM
         keepBuffer={4}
       />
 
-      <Polygon positions={[OUTER_RING, ...MANHATTAN_POLYGONS]} pathOptions={{ className: "outside-mask" }} interactive={false} />
+      {/* className must be a direct prop: react-leaflet applies pathOptions
+          after the shape is created, and Leaflet ignores className then. */}
+      <Polygon positions={[OUTER_RING, ...MANHATTAN_POLYGONS]} className="outside-mask" interactive={false} />
 
       {labelIcons.map((b) => (
         <Marker key={b.name} position={b.position} icon={b.icon} interactive={false} keyboard={false} />
@@ -92,7 +94,7 @@ export default function ManhattanMap({ selectedPoint, area, areaKey, places, onM
       <PlaceMarkers places={places} />
 
       {selectedPoint && (
-        <CircleMarker center={selectedPoint} radius={8} pathOptions={{ className: "start-point" }} interactive={false} />
+        <CircleMarker center={selectedPoint} radius={8} className="start-point" interactive={false} />
       )}
 
       <ClickHandler onMapClick={onMapClick} />
