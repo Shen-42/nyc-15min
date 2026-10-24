@@ -29,6 +29,16 @@ const labelIcons = COMING_SOON_LABELS.map((b) => ({
   }),
 }));
 
+// Base map tiles. On the live site, Stadia allows requests by checking the
+// site's domain (registered in the Stadia dashboard), so no key is needed.
+// On localhost, requests without a key are heavily rate-limited, so a free
+// key in client/.env.local (VITE_STADIA_API_KEY=...) is added when present.
+// .env.local is not committed, so the key stays off GitHub.
+const STADIA_KEY = import.meta.env.VITE_STADIA_API_KEY;
+const TILE_URL =
+  "https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png" +
+  (STADIA_KEY ? `?api_key=${STADIA_KEY}` : "");
+
 // react-leaflet hook: runs our function whenever the map is clicked.
 function ClickHandler({ onMapClick }) {
   useMapEvents({
@@ -54,9 +64,18 @@ export default function ManhattanMap({ selectedPoint, area, areaKey, places, onM
     >
       {/* Top right, so the results sheet on phones doesn't cover the credit. */}
       <AttributionControl position="topright" />
+      {/* Stadia Maps "OSM Bright": green parks, blue water, colored roads.
+          Free for non-commercial use (200,000 tiles a month). See TILE_URL. */}
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://stadiamaps.com/attribution/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'
+        url={TILE_URL}
+        maxZoom={18}
+        // Only fetch tiles once a zoom finishes, not for every level passed
+        // through on the way. Fewer requests, and fewer refused ones.
+        updateWhenZooming={false}
+        // Keep an extra ring of tiles around the view so short pans don't
+        // show blank squares.
+        keepBuffer={4}
       />
 
       <Polygon positions={[OUTER_RING, ...MANHATTAN_POLYGONS]} pathOptions={{ className: "outside-mask" }} interactive={false} />

@@ -4,11 +4,13 @@ Run from this folder with:
     uvicorn main:app --reload --port 8000
 """
 
+import os
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi.middleware.cors import CORSMiddleware
 from shapely.geometry import Point
 from shapely.ops import unary_union
 
@@ -63,6 +65,14 @@ async def lifespan(app):
 
 
 app = FastAPI(title="NYC 15-Minute City Explorer API", version="0.1.0", lifespan=lifespan)
+
+# On Render the site and the API have different addresses, so the browser
+# needs permission to call the API from the site. ALLOWED_ORIGINS lists the
+# site's address (comma-separated if more than one). Locally, Vite forwards
+# /api to this server, so no permission is needed there.
+allowed_origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+if allowed_origins:
+    app.add_middleware(CORSMiddleware, allow_origins=allowed_origins, allow_methods=["GET"])
 
 
 def require_graph():

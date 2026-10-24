@@ -1,0 +1,32 @@
+# Render Blueprint: creates both services from this file.
+# In the Render dashboard: New > Blueprint > pick this repo.
+services:
+  # The FastAPI server. Free plan: 512 MB RAM, sleeps after 15 minutes
+  # without visits and takes about a minute to wake.
+  - type: web
+    name: nyc-15min-api
+    runtime: python
+    plan: free
+    rootDir: server
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.8
+      # The site's address, e.g. https://nyc-15min.onrender.com
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+  # The React site, served as static files from Render's CDN. Always on.
+  - type: web
+    name: nyc-15min
+    runtime: static
+    buildCommand: cd client && npm ci && npm run build
+    staticPublishPath: client/dist
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # The API's address, e.g. https://nyc-15min-api.onrender.com
+      - key: VITE_API_URL
+        sync: false

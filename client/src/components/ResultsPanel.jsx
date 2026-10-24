@@ -6,6 +6,7 @@ export default function ResultsPanel({
   result,
   message,
   serverDown,
+  waking,
   focus,
   onFocus,
   expanded,
@@ -20,7 +21,13 @@ export default function ResultsPanel({
 
       {serverDown && (
         <p className="message message--error" role="alert">
-          Can't reach the server. Start it with uvicorn, then reload this page.
+          Can't reach the server. Reload the page in a minute to try again.
+        </p>
+      )}
+
+      {waking && !serverDown && (
+        <p className="message message--warn" role="status">
+          Waking up the server. On the free plan this can take up to a minute after a quiet spell.
         </p>
       )}
 

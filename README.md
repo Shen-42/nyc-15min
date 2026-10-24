@@ -60,3 +60,31 @@ pytest
 ## How the halves connect
 
 In development, Vite forwards any request starting with `/api` to `localhost:8000` (see `client/vite.config.js`). The React code calls `fetch("/api/...")` and never needs the server's full address.
+
+## Deploy (Render, free plan)
+
+`render.yaml` defines two services:
+
+- **nyc-15min-api**: the FastAPI server (Python). Sleeps after 15 minutes without visits; the first request after that takes about a minute while it wakes, and the site says so.
+- **nyc-15min**: the React site, built with `npm run build` and served as static files. Always on.
+
+Environment variables you set in the Render dashboard:
+
+| Service | Variable | Value |
+| --- | --- | --- |
+| nyc-15min-api | `ALLOWED_ORIGINS` | The site's address, e.g. `https://nyc-15min.onrender.com` |
+| nyc-15min | `VITE_API_URL` | The API's address, e.g. `https://nyc-15min-api.onrender.com` |
+
+Changing `VITE_API_URL` needs a new deploy of the site, because Vite bakes it in at build time.
+
+## Map tiles
+
+The base map is Stadia Maps' OSM Bright style (free for non-commercial use, 200,000 tiles a month).
+
+- **Locally:** without a key, Stadia rate-limits localhost and the map loads in patches. Create a free API key in the Stadia dashboard and put it in `client/.env.local`:
+  ```
+  VITE_STADIA_API_KEY=your-key-here
+  ```
+  Restart `npm run dev` after creating the file. `.env.local` is ignored by git.
+- **Deployed site:** add its domain under "Authentication Configuration" in the Stadia dashboard, or tiles won't load. No key is needed there.
+

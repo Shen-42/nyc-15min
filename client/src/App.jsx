@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { SLOW_REQUEST_MS, apiFetch } from "./api";
 import ManhattanMap from "./components/ManhattanMap";
 import ResultsPanel from "./components/ResultsPanel";
 import { isInManhattan } from "./data/manhattan";
@@ -18,21 +19,33 @@ export default function App() {
   const [focus, setFocus] = useState(null);
   // On phones, whether the category list is open in the bottom sheet.
   const [expanded, setExpanded] = useState(false);
+  // True while a request has taken long enough that the server is probably waking up.
+  const [waking, setWaking] = useState(false);
   // Counts requests so a slow old response can't replace a newer one.
   const latestRequest = useRef(0);
 
+  // Wake the server as soon as the page opens, so it's likely ready by the
+  // time someone picks a spot.
   useEffect(() => {
-    fetch("/api/health")
+    const slow = setTimeout(() => setWaking(true), SLOW_REQUEST_MS);
+    apiFetch("/api/health")
       .then((res) => setServerDown(!res.ok))
-      .catch(() => setServerDown(true));
+      .catch(() => setServerDown(true))
+      .finally(() => {
+        clearTimeout(slow);
+        setWaking(false);
+      });
   }, []);
 
   async function findWalkingArea(point) {
     const requestId = ++latestRequest.current;
     setStatus("loading");
     setMessage(null);
+    const slow = setTimeout(() => {
+      if (requestId === latestRequest.current) setWaking(true);
+    }, SLOW_REQUEST_MS);
     try {
-      const res = await fetch(`/api/reachable?lat=${point[0]}&lng=${point[1]}&minutes=${MINUTES}`);
+      const res = await apiFetch(`/api/reachable?lat=${point[0]}&lng=${point[1]}&minutes=${MINUTES}`);
       if (requestId !== latestRequest.current) return;
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -62,6 +75,9 @@ export default function App() {
       // fetch() throws when the server can't be reached at all.
       setServerDown(true);
       setStatus("done");
+    } finally {
+      clearTimeout(slow);
+      if (requestId === latestRequest.current) setWaking(false);
     }
   }
 
@@ -86,6 +102,7 @@ export default function App() {
         result={result}
         message={message}
         serverDown={serverDown}
+        waking={waking}
         focus={focus}
         onFocus={setFocus}
         expanded={expanded}
