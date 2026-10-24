@@ -3,10 +3,16 @@
 Public Overpass servers are often busy and answer 502 "at capacity", asking
 callers to retry with exponential backoff. download() does that: it retries
 a request up to RETRIES times, waiting 30 s, then 1, 2, 4, and 5 minutes,
-and alternates between the servers in SERVERS.
+and rotates through the servers.
 
-To use one specific server (for example, when the default is blocked):
-    OVERPASS_URL=https://overpass.kumi.systems/api python scripts/build_water.py
+Which servers, in order:
+- OVERPASS_URLS: a comma-separated list, if set. The refresh job sets it from
+  a GitHub secret, e.g. a NextGIS server with a free key (no request limits):
+      https://overpass.nextgis.com/YOUR_KEY/api,https://overpass-api.de/api
+- OVERPASS_URL: one server, if set (handy when the defaults are blocked):
+      OVERPASS_URL=https://overpass.kumi.systems/api python scripts/build_water.py
+- Otherwise SERVERS below. The OpenStreetMap wiki lists public instances:
+  https://wiki.openstreetmap.org/wiki/Overpass_API
 """
 
 import os
@@ -14,7 +20,10 @@ import time
 
 import osmnx as ox
 
-SERVERS = ["https://overpass-api.de/api", "https://overpass.private.coffee/api"]
+# overpass-api.de is the main public server (often at capacity). VK Maps runs
+# a free global mirror with no stated limits. Private.coffee, used before,
+# stopped answering in 2026.
+SERVERS = ["https://overpass-api.de/api", "https://maps.mail.ru/osm/tools/overpass/api"]
 RETRIES = 6
 FIRST_WAIT_S = 30
 MAX_WAIT_S = 300
@@ -32,6 +41,9 @@ def configure():
 
 
 def servers():
+    listed = [u.strip() for u in os.environ.get("OVERPASS_URLS", "").split(",") if u.strip()]
+    if listed:
+        return listed
     chosen = os.environ.get("OVERPASS_URL")
     return [chosen] if chosen else SERVERS
 
@@ -50,6 +62,7 @@ def download(label, fetch):
             if attempt == RETRIES - 1:
                 raise
             wait = min(FIRST_WAIT_S * 2**attempt, MAX_WAIT_S)
-            print(f"{label}: {ox.settings.overpass_url} failed ({type(err).__name__}). "
+            host = ox.settings.overpass_url.split("/")[2]  # host only: the path may hold a key
+            print(f"{label}: {host} failed ({type(err).__name__}). "
                   f"Try {attempt + 2} of {RETRIES} in {wait} s.")
             time.sleep(wait)

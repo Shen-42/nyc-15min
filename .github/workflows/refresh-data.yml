@@ -21,6 +21,11 @@ jobs:
     defaults:
       run:
         working-directory: server
+    env:
+      # Optional repo secret: Overpass servers to try, comma-separated, e.g. a
+      # NextGIS server with a free key first. Empty means the public defaults
+      # in server/scripts/overpass.py.
+      OVERPASS_URLS: ${{ secrets.OVERPASS_URLS }}
     steps:
       - uses: actions/checkout@v5
 
