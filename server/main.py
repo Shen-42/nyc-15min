@@ -8,6 +8,7 @@ import os
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
+from functools import lru_cache
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
@@ -150,18 +151,14 @@ def check_rate_limit(ip):
             del recent_searches[old_ip]
 
 
-@app.get("/api/reachable")
-def reachable(
-    request: Request,
-    response: Response,
-    lat: float = Query(..., ge=40.6, le=40.95),
-    lng: float = Query(..., ge=-74.1, le=-73.85),
-    minutes: float = Query(15, gt=0, le=30),
-):
-    """Every graph node you can walk to from a clicked point within `minutes`."""
-    check_rate_limit(request.client.host if request.client else "unknown")
+def plan_walk(request, kind, lat, lng, minutes, timer):
+    """The shared first half of every search: checks, nearest node, Dijkstra.
+
+    Returns (start node, meters from the click to it, minutes left for the
+    walk itself, {node: minutes}).
+    """
+    check_rate_limit(f"{request.client.host if request.client else 'unknown'}:{kind}")
     graph = require_graph()
-    timer = StepTimer()
 
     clicked = Point(lng, lat)  # shapely uses (x, y) = (lng, lat)
     for name, shape in water:
@@ -179,34 +176,80 @@ def reachable(
         )
 
     # The click is usually a few meters from the nearest node. Count that
-    # walk too, so the search gets slightly less time.
-    budget = minutes - gap_m / WALK_SPEED_M_PER_MIN
+    # walk too, so the search gets slightly less time. Rounded so nearby
+    # clicks share cached results.
+    budget = round(minutes - gap_m / WALK_SPEED_M_PER_MIN, 1)
 
     try:
-        times = graph.reachable_within(start, budget)
+        times = cached_search(start, budget)
     except NotImplementedError:
         raise HTTPException(status_code=501, detail="The 15-minute search isn't written yet (graph.py, reachable_within).")
     timer.lap("search")
+    return start, gap_m, budget, times
 
-    offset = minutes - budget
-    start_lat, start_lng = graph.coords[start]
-    area = walking_area(graph, start, times, budget, WALK_SPEED_M_PER_MIN, land)
-    timer.lap("area")
-    reached = reachable_amenities(amenities, times, offset)
+
+# Recent results, kept in memory. Clicks that snap to the same street point
+# (or the same spot clicked twice) are answered without redoing the work.
+# 512 areas take roughly 20 MB, well inside the free plan's 512 MB.
+@lru_cache(maxsize=512)
+def cached_search(start, budget):
+    return walk_graph.reachable_within(start, budget)
+
+
+@lru_cache(maxsize=512)
+def cached_area(start, budget):
+    return walking_area(walk_graph, start, cached_search(start, budget), budget, WALK_SPEED_M_PER_MIN, land)
+
+
+def finish(response, path, timer):
+    # Shows in the terminal (and Render's logs), and in Chrome under
+    # DevTools > Network > the request > Timing.
+    print(f"{path} {timer.summary()}")
+    response.headers["Server-Timing"] = timer.header()
+
+
+Lat = Query(..., ge=40.6, le=40.95)
+Lng = Query(..., ge=-74.1, le=-73.85)
+Minutes = Query(15, gt=0, le=30)
+
+
+@app.get("/api/places")
+def places(request: Request, response: Response, lat: float = Lat, lng: float = Lng, minutes: float = Minutes):
+    """The score and the places within reach. Cheap, so the panel can fill in
+    before the shaded area (the slow part) is ready."""
+    timer = StepTimer()
+    start, gap_m, budget, times = plan_walk(request, "places", lat, lng, minutes, timer)
+    reached = reachable_amenities(amenities, times, minutes - budget)
     score = score_walk(reached)
     timer.lap("places")
-
-    # Shows in the terminal, and in Chrome under DevTools > Network > the
-    # request > Timing, so slow steps are easy to spot.
-    print(f"/api/reachable {timer.summary()}")
-    response.headers["Server-Timing"] = timer.header()
+    finish(response, "/api/places", timer)
+    start_lat, start_lng = walk_graph.coords[start]
     return {
         "start": {"node_id": start, "lat": start_lat, "lng": start_lng, "distance_m": round(gap_m, 1)},
         "minutes": minutes,
-        "area": area,  # GeoJSON geometry
         "amenities": reached,  # closest first
         "score": score,
     }
+
+
+@app.get("/api/area")
+def area(request: Request, response: Response, lat: float = Lat, lng: float = Lng, minutes: float = Minutes):
+    """The shaded walking area as a GeoJSON geometry. The slow part of a search."""
+    timer = StepTimer()
+    start, _, budget, _ = plan_walk(request, "area", lat, lng, minutes, timer)
+    geometry = cached_area(start, budget)
+    timer.lap("area")
+    finish(response, "/api/area", timer)
+    return {"area": geometry}
+
+
+@app.get("/api/reachable")
+def reachable(request: Request, response: Response, lat: float = Lat, lng: float = Lng, minutes: float = Minutes):
+    """Everything in one response: places, score, and area. The site uses
+    /api/places and /api/area instead, so the panel doesn't wait for the area."""
+    result = places(request, response, lat, lng, minutes)
+    result["area"] = area(request, response, lat, lng, minutes)["area"]
+    return result
 
 
 class StepTimer:

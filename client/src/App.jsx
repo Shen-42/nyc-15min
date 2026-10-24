@@ -39,13 +39,21 @@ export default function App() {
 
   async function findWalkingArea(point) {
     const requestId = ++latestRequest.current;
+    const query = `lat=${point[0]}&lng=${point[1]}&minutes=${MINUTES}`;
     setStatus("loading");
     setMessage(null);
     const slow = setTimeout(() => {
       if (requestId === latestRequest.current) setWaking(true);
     }, SLOW_REQUEST_MS);
+
+    // Two requests at once: the places and score come back quickly, and the
+    // shaded area (slow to build on the free server) is drawn when it lands.
+    const areaRequest = apiFetch(`/api/area?${query}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .catch(() => null);
+
     try {
-      const res = await apiFetch(`/api/reachable?lat=${point[0]}&lng=${point[1]}&minutes=${MINUTES}`);
+      const res = await apiFetch(`/api/places?${query}`);
       if (requestId !== latestRequest.current) return;
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -63,12 +71,9 @@ export default function App() {
       }
       const data = await res.json();
       if (requestId !== latestRequest.current) return;
-      setResult({
-        id: requestId, // tells the map a new area arrived
-        area: { type: "Feature", properties: {}, geometry: data.area },
-        places: data.amenities,
-        score: data.score,
-      });
+      // Show the score and places now. The old area is cleared so it never
+      // sits under the new dot.
+      setResult({ id: requestId, area: null, places: data.amenities, score: data.score });
       setServerDown(false);
       setStatus("done");
     } catch {
@@ -76,9 +81,22 @@ export default function App() {
       // fetch() throws when the server can't be reached at all.
       setServerDown(true);
       setStatus("done");
+      return;
     } finally {
       clearTimeout(slow);
       if (requestId === latestRequest.current) setWaking(false);
+    }
+
+    try {
+      const areaData = await areaRequest;
+      if (requestId !== latestRequest.current || !areaData) return;
+      setResult((current) =>
+        current?.id === requestId
+          ? { ...current, area: { type: "Feature", properties: {}, geometry: areaData.area } }
+          : current
+      );
+    } catch {
+      // The panel already has its results; a missing shading isn't worth an error.
     }
   }
 
