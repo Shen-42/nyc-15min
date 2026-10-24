@@ -63,5 +63,8 @@ jobs:
             exit 0
           fi
           git commit -m "Monthly data refresh $(date -u +%Y-%m-%d)"
+          # Someone may have pushed to main while this job ran. Put this
+          # commit on top of theirs; it only touches server/data/.
+          git pull --rebase origin main
           git push
           echo "Committed new data. Render will redeploy the API." >> "$GITHUB_STEP_SUMMARY"
