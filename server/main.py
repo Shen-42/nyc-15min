@@ -11,12 +11,14 @@ from fastapi import FastAPI, HTTPException, Query
 from shapely.geometry import Point
 from shapely.ops import unary_union
 
+from amenities import load_amenities, reachable_amenities
 from graph import WALK_SPEED_M_PER_MIN, WalkGraph
 from walk_area import load_land, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.json"
 LAND_FILE = Path(__file__).parent / "data" / "manhattan-boundary.json"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
+AMENITIES_FILE = Path(__file__).parent / "data" / "amenities.json"
 
 # Clicks farther than this from any street or path (the middle of a lake or a
 # rail yard) are turned away instead of starting from a far-off path.
@@ -29,11 +31,18 @@ walk_graph = None
 land = None
 # Lakes and ponds as (name, shape), for turning away clicks on water.
 water = []
+# Groceries, pharmacies, clinics, parks, schools, and subway stations.
+amenities = []
 
 
 @asynccontextmanager
 async def lifespan(app):
-    global walk_graph, land, water
+    global walk_graph, land, water, amenities
+    if AMENITIES_FILE.exists():
+        amenities = load_amenities(AMENITIES_FILE)
+        print(f"Loaded {len(amenities):,} places")
+    else:
+        print(f"No places file at {AMENITIES_FILE}. Run: python scripts/build_amenities.py")
     if WATER_FILE.exists():
         water = load_water(WATER_FILE)
         print(f"Loaded {len(water)} lakes and ponds")
@@ -135,4 +144,5 @@ def reachable(
         "minutes": minutes,
         "points": points,  # [lat, lng, minutes to walk there]
         "area": walking_area(graph, start, times, budget, WALK_SPEED_M_PER_MIN, land),  # GeoJSON geometry
+        "amenities": reachable_amenities(amenities, times, offset),  # closest first
     }
