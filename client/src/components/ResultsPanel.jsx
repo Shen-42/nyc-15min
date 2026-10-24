@@ -27,7 +27,7 @@ export default function ResultsPanel({
 
       {waking && !serverDown && (
         <p className="message message--warn" role="status">
-          Waking up the server. On the free plan this can take up to a minute after a quiet spell.
+          Waking up the server…
         </p>
       )}
 
