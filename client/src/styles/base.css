@@ -1,0 +1,45 @@
+/* Base: resets and element defaults. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--color-ink);
+  background: var(--color-surface);
+}
+
+h1,
+h2,
+p,
+ol,
+ul {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* A visible outline for keyboard users only (not on mouse clicks). */
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Text for screen readers only. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

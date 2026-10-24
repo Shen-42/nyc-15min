@@ -1,0 +1,207 @@
+/* Results panel: title, score, category rows, messages. */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.panel__title {
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.panel__intro {
+  color: var(--color-muted);
+}
+
+.panel__results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* While a new search runs, the old result stays on screen, faded. */
+.panel__results[aria-busy="true"] {
+  opacity: 0.5;
+}
+
+/* ---- Score ---- */
+
+.score-summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--space-4);
+  align-items: center;
+}
+
+.score-summary__number {
+  grid-row: span 2;
+  font-size: var(--text-score);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-summary__verdict {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.score-summary__detail {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+/* ---- Show/hide categories (phones only) ---- */
+
+.panel__toggle {
+  min-height: var(--tap-target);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.category-list {
+  display: none;
+  list-style: none;
+  padding: 0;
+}
+
+.panel--expanded .category-list {
+  display: block;
+}
+
+@media (min-width: 768px) {
+  .panel__toggle {
+    display: none;
+  }
+
+  .category-list {
+    display: block;
+  }
+}
+
+/* ---- Category rows ---- */
+
+.category-list > li + li {
+  border-top: 1px solid var(--color-line);
+}
+
+.category-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--tap-target);
+  padding: var(--space-3) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.category-row:hover {
+  background: var(--color-surface-sunk);
+}
+
+.category-row[aria-pressed="true"] {
+  background: var(--color-surface-sunk);
+  box-shadow: inset 4px 0 0 var(--cat);
+}
+
+.category-row__label {
+  display: block;
+  font-weight: 700;
+}
+
+.category-row__detail {
+  display: block;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+.category-row__score {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The bar is decoration: the number beside it carries the value. */
+.meter {
+  width: 48px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-line);
+  overflow: hidden;
+}
+
+.meter__fill {
+  display: block;
+  height: 100%;
+  width: var(--value);
+  background: var(--cat);
+}
+
+.nearest-list {
+  padding: 0 var(--space-2) var(--space-3) calc(var(--space-2) + 28px + var(--space-3));
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+/* ---- Category glyphs (shared with the map markers) ---- */
+
+.cat-grocery { --cat: var(--cat-grocery); }
+.cat-subway { --cat: var(--cat-subway); }
+.cat-pharmacy { --cat: var(--cat-pharmacy); }
+.cat-clinic { --cat: var(--cat-clinic); }
+.cat-park { --cat: var(--cat-park); }
+.cat-school { --cat: var(--cat-school); }
+
+.glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--cat);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ---- Messages ---- */
+
+.message {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+}
+
+.message--warn {
+  background: var(--color-warn-bg);
+  color: var(--color-warn-ink);
+}
+
+.message--error {
+  background: var(--color-error-bg);
+  color: var(--color-error-ink);
+}
+
+/* ---- Motion, only for people who haven't asked to reduce it ---- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .panel__results {
+    transition: opacity 150ms ease-out;
+  }
+
+  .meter__fill {
+    transition: width 300ms ease-out;
+  }
+}

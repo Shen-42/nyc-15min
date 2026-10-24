@@ -1,0 +1,53 @@
+/* Layout, mobile first: a full-screen map with the results in a sheet
+   along the bottom. From 768 px up, the results move to a side panel. */
+
+.app {
+  position: relative;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.map-wrap {
+  position: absolute;
+  inset: 0;
+}
+
+.map {
+  height: 100%;
+}
+
+.panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1100; /* above Leaflet's panes and controls */
+  max-height: 65dvh;
+  overflow-y: auto;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: 0 -2px 12px rgb(31 36 48 / 0.18);
+}
+
+@media (min-width: 768px) {
+  .app {
+    display: grid;
+    grid-template-columns: var(--panel-width) 1fr;
+  }
+
+  .map-wrap {
+    position: relative;
+    inset: auto;
+  }
+
+  .panel {
+    position: static;
+    max-height: none;
+    height: 100dvh;
+    padding: var(--space-6);
+    border-radius: 0;
+    border-right: 1px solid var(--color-line);
+    box-shadow: none;
+  }
+}

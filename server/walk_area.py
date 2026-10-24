@@ -11,7 +11,7 @@ import math
 from pathlib import Path
 
 import shapely
-from shapely.geometry import MultiLineString, MultiPolygon, Point, Polygon, mapping, shape
+from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box, mapping, shape
 from shapely.ops import unary_union
 
 # How far on each side of a street the shape extends. 40 m covers the
@@ -85,7 +85,11 @@ def walking_area(graph, start, times, max_minutes, speed_m_per_min, land=None):
 
     segments = [s for s in segments if len(s) >= 2 and s[0] != s[-1]]
     if segments:
-        lines = MultiLineString(segments).buffer(BUFFER_M, quad_segs=4)
+        # Widen each segment on its own, then merge them all at once.
+        # Buffering one big MultiLineString does the same thing but is much
+        # slower, because it works out every crossing between segments first.
+        widened = shapely.buffer([LineString(s) for s in segments], BUFFER_M, quad_segs=4)
+        lines = shapely.union_all(widened)
     else:
         lines = Point(0, 0).buffer(BUFFER_M)
 
@@ -100,7 +104,10 @@ def walking_area(graph, start, times, max_minutes, speed_m_per_min, land=None):
 
     area = shapely.transform(lines, to_lnglat)
     if land is not None:
-        area = polygons_only(area.intersection(land))
+        # Cut the shoreline down to the area's bounding box first, so the
+        # final step only compares the area with the nearby shoreline.
+        nearby_land = land.intersection(box(*area.bounds))
+        area = polygons_only(area.intersection(nearby_land))
     return mapping(area)
 
 

@@ -1,10 +1,11 @@
 import {
-  MapContainer,
-  TileLayer,
-  Polygon,
+  AttributionControl,
   CircleMarker,
-  Marker,
   GeoJSON,
+  MapContainer,
+  Marker,
+  Polygon,
+  TileLayer,
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
@@ -15,6 +16,7 @@ import {
   OUTER_RING,
   COMING_SOON_LABELS,
 } from "../data/manhattan";
+import PlaceMarkers from "./PlaceMarkers";
 
 // Text labels for the other boroughs. divIcon draws HTML instead of an image.
 const labelIcons = COMING_SOON_LABELS.map((b) => ({
@@ -37,7 +39,8 @@ function ClickHandler({ onMapClick }) {
   return null;
 }
 
-export default function ManhattanMap({ selectedPoint, area, onMapClick }) {
+// Colors for the shapes below come from styles/map.css, by class name.
+export default function ManhattanMap({ selectedPoint, area, areaKey, places, onMapClick }) {
   return (
     <MapContainer
       className="map"
@@ -47,40 +50,30 @@ export default function ManhattanMap({ selectedPoint, area, onMapClick }) {
       maxZoom={18}
       maxBounds={MANHATTAN_BOUNDS}
       maxBoundsViscosity={1.0}
+      attributionControl={false}
     >
+      {/* Top right, so the results sheet on phones doesn't cover the credit. */}
+      <AttributionControl position="topright" />
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      {/* Gray mask over everything except Manhattan */}
-      <Polygon
-        positions={[OUTER_RING, ...MANHATTAN_POLYGONS]}
-        pathOptions={{ color: "#666", weight: 1, fillColor: "#333", fillOpacity: 0.35 }}
-        interactive={false}
-      />
+      <Polygon positions={[OUTER_RING, ...MANHATTAN_POLYGONS]} pathOptions={{ className: "outside-mask" }} interactive={false} />
 
       {labelIcons.map((b) => (
-        <Marker key={b.name} position={b.position} icon={b.icon} interactive={false} />
+        <Marker key={b.name} position={b.position} icon={b.icon} interactive={false} keyboard={false} />
       ))}
 
-      {/* The 15-minute walking area. GeoJSON doesn't redraw when its data
-          changes, so a new key forces a fresh layer for each new area. */}
-      {area && (
-        <GeoJSON
-          key={JSON.stringify(selectedPoint)}
-          data={area}
-          style={{ color: "#1f6feb", weight: 2, fillColor: "#1f6feb", fillOpacity: 0.2 }}
-          interactive={false}
-        />
-      )}
+      {/* GeoJSON doesn't redraw when its data changes, so a new key forces
+          a fresh layer. The key changes when a new result arrives, not when
+          the dot moves, which happens before the result is back. */}
+      {area && <GeoJSON key={areaKey} data={area} className="walk-area" interactive={false} />}
+
+      <PlaceMarkers places={places} />
 
       {selectedPoint && (
-        <CircleMarker
-          center={selectedPoint}
-          radius={8}
-          pathOptions={{ color: "#fff", weight: 2, fillColor: "#1f6feb", fillOpacity: 1 }}
-        />
+        <CircleMarker center={selectedPoint} radius={8} pathOptions={{ className: "start-point" }} interactive={false} />
       )}
 
       <ClickHandler onMapClick={onMapClick} />

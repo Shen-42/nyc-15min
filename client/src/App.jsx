@@ -1,122 +1,105 @@
 import { useEffect, useRef, useState } from "react";
 import ManhattanMap from "./components/ManhattanMap";
+import ResultsPanel from "./components/ResultsPanel";
 import { isInManhattan } from "./data/manhattan";
 
 const MINUTES = 15;
 
 export default function App() {
-  const [serverStatus, setServerStatus] = useState("checking");
+  const [serverDown, setServerDown] = useState(false);
   const [selectedPoint, setSelectedPoint] = useState(null);
-  const [notice, setNotice] = useState("Click anywhere in Manhattan.");
-  // status: "idle" | "loading" | "done" | "not-written" | "error"
-  const [search, setSearch] = useState({ status: "idle" });
+  // status: "idle" | "loading" | "done"
+  const [status, setStatus] = useState("idle");
+  // The last successful search. Kept on screen while a new one loads.
+  const [result, setResult] = useState(null);
+  // { kind: "warn" | "error", text } or null
+  const [message, setMessage] = useState(null);
+  // The category whose places are highlighted on the map, or null.
+  const [focus, setFocus] = useState(null);
+  // On phones, whether the category list is open in the bottom sheet.
+  const [expanded, setExpanded] = useState(false);
   // Counts requests so a slow old response can't replace a newer one.
   const latestRequest = useRef(0);
 
   useEffect(() => {
     fetch("/api/health")
-      .then((res) => {
-        if (!res.ok) throw new Error();
-        setServerStatus("ok");
-      })
-      .catch(() => setServerStatus("error"));
+      .then((res) => setServerDown(!res.ok))
+      .catch(() => setServerDown(true));
   }, []);
 
   async function findWalkingArea(point) {
     const requestId = ++latestRequest.current;
-    setSearch({ status: "loading" });
+    setStatus("loading");
+    setMessage(null);
     try {
       const res = await fetch(`/api/reachable?lat=${point[0]}&lng=${point[1]}&minutes=${MINUTES}`);
       if (requestId !== latestRequest.current) return;
-      if (res.status === 501) {
-        setSearch({ status: "not-written" });
-        return;
-      }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        // 422 means the server turned the click away and says why.
-        throw new Error(res.status === 422 ? body.detail : `Search failed: ${body.detail ?? res.status}`);
+        // 422: the server turned the click away (water, no path nearby) and says why.
+        // 501: the search function isn't written yet.
+        const text =
+          res.status === 422 || res.status === 501
+            ? body.detail
+            : `The search failed (${body.detail ?? `error ${res.status}`}). Try another spot.`;
+        setResult(null);
+        setMessage({ kind: res.status === 422 ? "warn" : "error", text });
+        setStatus("done");
+        return;
       }
       const data = await res.json();
       if (requestId !== latestRequest.current) return;
-      setSearch({
-        status: "done",
-        // The server sends the walking area as a GeoJSON geometry.
+      setResult({
+        id: requestId, // tells the map a new area arrived
         area: { type: "Feature", properties: {}, geometry: data.area },
-        reachedCount: data.points.length,
+        places: data.amenities,
         score: data.score,
       });
-    } catch (err) {
+      setServerDown(false);
+      setStatus("done");
+    } catch {
       if (requestId !== latestRequest.current) return;
-      // fetch() throws a TypeError when the server can't be reached at all.
-      const message = err instanceof TypeError ? "Search failed: can't reach the server." : err.message;
-      setSearch({ status: "error", message });
+      // fetch() throws when the server can't be reached at all.
+      setServerDown(true);
+      setStatus("done");
     }
   }
 
   function handleMapClick(point) {
+    setFocus(null);
     if (isInManhattan(point)) {
       setSelectedPoint(point);
-      setNotice("");
       findWalkingArea(point);
     } else {
       latestRequest.current++; // ignore any search still in flight
       setSelectedPoint(null);
-      setSearch({ status: "idle" });
-      setNotice("Only Manhattan is available for now.");
+      setResult(null);
+      setStatus("idle");
+      setMessage({ kind: "warn", text: "Only Manhattan is available for now. Pick a spot on the island." });
     }
   }
 
   return (
-    <div className="layout">
-      <aside className="panel">
-        <h1>NYC 15-Minute City Explorer</h1>
-
-        {selectedPoint ? (
-          <dl className="coords">
-            <dt>Latitude</dt>
-            <dd>{selectedPoint[0].toFixed(5)}</dd>
-            <dt>Longitude</dt>
-            <dd>{selectedPoint[1].toFixed(5)}</dd>
-          </dl>
-        ) : (
-          <p className="notice">{notice}</p>
-        )}
-
-        {search.status === "loading" && <p className="notice">Finding your {MINUTES}-minute walk...</p>}
-        {search.status === "done" && (
-          <>
-            <div className="score">
-              <span className="score-number">{search.score.score}</span>
-              <span className="score-label">/ 100</span>
-            </div>
-            <p className="notice">
-              Essentials are {search.score.proximity_minutes} minutes away on average.
-              {search.score.missing.length > 0 && <> Nothing in reach: {search.score.missing.join(", ")}.</>}
-            </p>
-            <p className="notice small">Shaded: everywhere you can walk in {MINUTES} minutes.</p>
-          </>
-        )}
-        {search.status === "not-written" && (
-          <p className="notice warn">
-            The {MINUTES}-minute search isn't written yet. Fill in <code>reachable_within</code> in{" "}
-            <code>server/graph.py</code>.
-          </p>
-        )}
-        {search.status === "error" && <p className="notice warn">{search.message}</p>}
-
-        <p className={`server server-${serverStatus}`}>
-          {serverStatus === "checking" && "Checking server..."}
-          {serverStatus === "ok" && "Server connected"}
-          {serverStatus === "error" && "Server not reachable. Is uvicorn running?"}
-        </p>
-      </aside>
-
-      <ManhattanMap
-        selectedPoint={selectedPoint}
-        area={search.status === "done" ? search.area : null}
-        onMapClick={handleMapClick}
+    <div className="app">
+      <ResultsPanel
+        status={status}
+        result={result}
+        message={message}
+        serverDown={serverDown}
+        focus={focus}
+        onFocus={setFocus}
+        expanded={expanded}
+        onToggleExpanded={() => setExpanded((open) => !open)}
       />
+      <div className="map-wrap" data-focus={focus ?? undefined}>
+        <ManhattanMap
+          selectedPoint={selectedPoint}
+          area={result?.area}
+          areaKey={result?.id}
+          places={result?.places ?? []}
+          onMapClick={handleMapClick}
+        />
+      </div>
     </div>
   );
 }

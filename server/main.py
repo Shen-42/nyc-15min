@@ -4,10 +4,11 @@ Run from this folder with:
     uvicorn main:app --reload --port 8000
 """
 
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 from shapely.geometry import Point
 from shapely.ops import unary_union
 
@@ -104,12 +105,14 @@ def nearest_node(
 
 @app.get("/api/reachable")
 def reachable(
+    response: Response,
     lat: float = Query(..., ge=40.6, le=40.95),
     lng: float = Query(..., ge=-74.1, le=-73.85),
     minutes: float = Query(15, gt=0, le=30),
 ):
     """Every graph node you can walk to from a clicked point within `minutes`."""
     graph = require_graph()
+    timer = StepTimer()
 
     clicked = Point(lng, lat)  # shapely uses (x, y) = (lng, lat)
     for name, shape in water:
@@ -118,6 +121,7 @@ def reachable(
             raise HTTPException(status_code=422, detail=f"That spot is in {where}. Try clicking on land.")
 
     start, gap_m = graph.nearest_node(lat, lng)
+    timer.lap("nearest")
 
     if gap_m > MAX_START_GAP_M:
         raise HTTPException(
@@ -133,6 +137,7 @@ def reachable(
         times = graph.reachable_within(start, budget)
     except NotImplementedError:
         raise HTTPException(status_code=501, detail="The 15-minute search isn't written yet (graph.py, reachable_within).")
+    timer.lap("search")
 
     offset = minutes - budget
     points = [
@@ -140,12 +145,41 @@ def reachable(
         for node, t in times.items()
     ]
     start_lat, start_lng = graph.coords[start]
+    area = walking_area(graph, start, times, budget, WALK_SPEED_M_PER_MIN, land)
+    timer.lap("area")
     reached = reachable_amenities(amenities, times, offset)
+    score = score_walk(reached)
+    timer.lap("places")
+
+    # Shows in the terminal, and in Chrome under DevTools > Network > the
+    # request > Timing, so slow steps are easy to spot.
+    print(f"/api/reachable {timer.summary()}")
+    response.headers["Server-Timing"] = timer.header()
     return {
         "start": {"node_id": start, "lat": start_lat, "lng": start_lng, "distance_m": round(gap_m, 1)},
         "minutes": minutes,
         "points": points,  # [lat, lng, minutes to walk there]
-        "area": walking_area(graph, start, times, budget, WALK_SPEED_M_PER_MIN, land),  # GeoJSON geometry
+        "area": area,  # GeoJSON geometry
         "amenities": reached,  # closest first
-        "score": score_walk(reached),
+        "score": score,
     }
+
+
+class StepTimer:
+    """Measures how long each step of a request takes, in milliseconds."""
+
+    def __init__(self):
+        self.last = time.perf_counter()
+        self.steps = []
+
+    def lap(self, name):
+        now = time.perf_counter()
+        self.steps.append((name, (now - self.last) * 1000))
+        self.last = now
+
+    def summary(self):
+        total = sum(ms for _, ms in self.steps)
+        return ", ".join(f"{name} {ms:.0f} ms" for name, ms in self.steps) + f" (total {total:.0f} ms)"
+
+    def header(self):
+        return ", ".join(f"{name};dur={ms:.1f}" for name, ms in self.steps)

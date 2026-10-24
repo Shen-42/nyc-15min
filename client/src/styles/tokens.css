@@ -1,0 +1,53 @@
+/* Design tokens: every color, size, and font the app uses.
+   Change a value here and it updates everywhere. */
+
+:root {
+  /* Text and surfaces. Ink on white is 15.5:1, muted on white 6.2:1. */
+  --color-ink: #1f2430;
+  --color-muted: #5a6172;
+  --color-line: #d9dce3;
+  --color-surface: #ffffff;
+  --color-surface-sunk: #f3f4f7;
+  --color-focus: #1f2430;
+
+  /* Messages */
+  --color-warn-bg: #fff4d6;
+  --color-warn-ink: #6b4e00;
+  --color-error-bg: #fbe4e4;
+  --color-error-ink: #8a1c1c;
+
+  /* The walking area is neutral so the place colors stand out on the map. */
+  --color-walk: #1f2430;
+
+  /* Place categories. Each is at least 5:1 against white, so white
+     glyphs on them pass WCAG AA (4.5:1). Hues follow the color-blind-safe
+     Okabe-Ito palette, darkened for contrast. */
+  --cat-grocery: #b84a00;
+  --cat-subway: #0067a5;
+  --cat-pharmacy: #8e3a7e;
+  --cat-clinic: #b0243a;
+  --cat-park: #2e7d32;
+  --cat-school: #7a5c00;
+
+  /* Type: Atkinson Hyperlegible, designed by the Braille Institute for
+     low-vision readers. Scale steps follow a 1.25 ratio. */
+  --font-body: "Atkinson Hyperlegible", system-ui, sans-serif;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.25rem;
+  --text-score: 4rem;
+
+  /* Spacing, in steps of 4 px */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+
+  --radius-sm: 4px;
+  --radius-lg: 16px;
+
+  /* 44 px meets Apple's tap-target guideline and WCAG 2.5.5 (AAA). */
+  --tap-target: 44px;
+  --panel-width: 360px;
+}
