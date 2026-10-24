@@ -79,3 +79,8 @@ body {
   color: #6b4e00;
 }
 .warn code { font-size: 0.85em; }
+
+.score { display: flex; align-items: baseline; gap: 0.4rem; }
+.score-number { font-size: 3rem; font-weight: 700; line-height: 1; }
+.score-label { color: #555; }
+.small { font-size: 0.85rem; }

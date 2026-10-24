@@ -44,7 +44,7 @@ export default function App() {
         // The server sends the walking area as a GeoJSON geometry.
         area: { type: "Feature", properties: {}, geometry: data.area },
         reachedCount: data.points.length,
-        startDistance: data.start.distance_m,
+        score: data.score,
       });
     } catch (err) {
       if (requestId !== latestRequest.current) return;
@@ -85,10 +85,17 @@ export default function App() {
 
         {search.status === "loading" && <p className="notice">Finding your {MINUTES}-minute walk...</p>}
         {search.status === "done" && (
-          <p className="notice">
-            Shaded: everywhere you can walk in {MINUTES} minutes ({search.reachedCount.toLocaleString()} street
-            points).
-          </p>
+          <>
+            <div className="score">
+              <span className="score-number">{search.score.score}</span>
+              <span className="score-label">/ 100</span>
+            </div>
+            <p className="notice">
+              Essentials are {search.score.proximity_minutes} minutes away on average.
+              {search.score.missing.length > 0 && <> Nothing in reach: {search.score.missing.join(", ")}.</>}
+            </p>
+            <p className="notice small">Shaded: everywhere you can walk in {MINUTES} minutes.</p>
+          </>
         )}
         {search.status === "not-written" && (
           <p className="notice warn">

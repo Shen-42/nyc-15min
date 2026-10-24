@@ -13,6 +13,7 @@ from shapely.ops import unary_union
 
 from amenities import load_amenities, reachable_amenities
 from graph import WALK_SPEED_M_PER_MIN, WalkGraph
+from scoring import score_walk
 from walk_area import load_land, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.json"
@@ -139,10 +140,12 @@ def reachable(
         for node, t in times.items()
     ]
     start_lat, start_lng = graph.coords[start]
+    reached = reachable_amenities(amenities, times, offset)
     return {
         "start": {"node_id": start, "lat": start_lat, "lng": start_lng, "distance_m": round(gap_m, 1)},
         "minutes": minutes,
         "points": points,  # [lat, lng, minutes to walk there]
         "area": walking_area(graph, start, times, budget, WALK_SPEED_M_PER_MIN, land),  # GeoJSON geometry
-        "amenities": reachable_amenities(amenities, times, offset),  # closest first
+        "amenities": reached,  # closest first
+        "score": score_walk(reached),
     }
