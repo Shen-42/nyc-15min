@@ -6,7 +6,6 @@ Run from this folder with:
 
 import os
 import time
-from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
@@ -19,6 +18,7 @@ from shapely.ops import unary_union
 
 from amenities import load_amenities, reachable_amenities
 from graph import WALK_SPEED_M_PER_MIN, WalkGraph
+from rate_limit import RateLimited, RateLimiter, make_counter
 from scoring import score_walk
 from walk_area import load_land, load_water, walking_area
 
@@ -89,7 +89,10 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # /api to this server, so no permission is needed there.
 allowed_origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 if allowed_origins:
-    app.add_middleware(CORSMiddleware, allow_origins=allowed_origins, allow_methods=["GET"])
+    # expose_headers lets the site read Retry-After from a 429.
+    app.add_middleware(
+        CORSMiddleware, allow_origins=allowed_origins, allow_methods=["GET"], expose_headers=["Retry-After"]
+    )
 
 
 def require_graph():
@@ -131,24 +134,22 @@ def nearest_node(
 
 
 # Rate limit: each visitor (by IP address) gets SEARCHES_PER_MINUTE searches
-# a minute. Normal clicking stays far below it; a script hammering the API
-# gets a 429 instead of using up the server and Render's free bandwidth.
+# a minute per route. Normal clicking stays far below it; a script hammering
+# the API gets a 429 instead of using up the server and Render's free
+# bandwidth. See rate_limit.py for where the counts are kept.
 SEARCHES_PER_MINUTE = 30
-recent_searches = defaultdict(deque)  # IP -> times of its recent searches
+rate_limiter = RateLimiter(SEARCHES_PER_MINUTE, make_counter())
 
 
-def check_rate_limit(ip):
-    now = time.monotonic()
-    times = recent_searches[ip]
-    while times and now - times[0] > 60:
-        times.popleft()
-    if len(times) >= SEARCHES_PER_MINUTE:
-        raise HTTPException(status_code=429, detail="Too many searches in a minute. Wait a moment and try again.")
-    times.append(now)
-    # Forget visitors who have gone quiet, so the table doesn't grow forever.
-    if len(recent_searches) > 10_000:
-        for old_ip in [k for k, v in recent_searches.items() if not v or now - v[-1] > 60]:
-            del recent_searches[old_ip]
+def check_rate_limit(key):
+    try:
+        rate_limiter.check(key)
+    except RateLimited as limited:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many searches in a minute. Try again in {limited.retry_after} seconds.",
+            headers={"Retry-After": str(limited.retry_after)},
+        )
 
 
 def plan_walk(request, kind, lat, lng, minutes, timer):

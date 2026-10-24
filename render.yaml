@@ -20,6 +20,19 @@ services:
       # The site's address, e.g. https://nyc-15min.onrender.com
       - key: ALLOWED_ORIGINS
         sync: false
+      # Where the rate limit keeps its counts (see server/rate_limit.py).
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: nyc-15min-limits
+          property: connectionString
+
+  # Redis-compatible store for rate-limit counts. Free plan: in memory only,
+  # which is fine because the counts only matter for a minute.
+  - type: keyvalue
+    name: nyc-15min-limits
+    plan: free
+    ipAllowList: [] # only the API, over Render's private network
 
   # The React site, served as static files from Render's CDN. Always on.
   - type: web

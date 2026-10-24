@@ -3,3 +3,4 @@ uvicorn[standard]>=0.30
 httpx>=0.27
 pytest>=8.0
 shapely>=2.0
+redis>=5.0

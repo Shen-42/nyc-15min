@@ -39,8 +39,9 @@ Click any point in Manhattan to see everywhere you can walk in 15 minutes, which
 | Back end | Python, FastAPI, Shapely |
 | Data | OpenStreetMap via OSMnx and the Overpass API |
 | Map tiles | Stadia Maps, OSM Bright style |
-| Hosting | Render: a static site for the front end and a web service for the API |
-| Tests | pytest (46 tests) |
+| Hosting | Render: a static site, a web service for the API, and Key Value (Redis) for rate limits |
+| Automation | GitHub Actions: monthly data refresh |
+| Tests | pytest (50 tests) |
 
 ## Project layout
 
@@ -52,15 +53,17 @@ client/                    React site
   src/data/                categories, Manhattan boundary
   src/styles/              tokens, base, layout, panel, and map CSS
 server/                    FastAPI API
-  main.py                  routes, rate limit, caching, timing
+  main.py                  routes, caching, timing
+  rate_limit.py            per-visitor rate limit, in Redis or memory
   graph.py                 walking graph, grid index, Dijkstra
   walk_area.py             builds the shaded walking area
   amenities.py             which places a walk reaches
   scoring.py               the 0–100 score
-  scripts/                 one-time downloads: graph, water, places
+  scripts/                 downloads (graph, water, places) and the data check
   data/                    the downloaded data (committed)
   test_*.py                tests
-render.yaml                Render setup for both services
+render.yaml                Render setup for all three services
+.github/workflows/         monthly data refresh
 ```
 
 ## Run it locally
@@ -108,13 +111,15 @@ All routes take `lat`, `lng`, and optionally `minutes` (default 15, at most 30).
 | `GET /api/graph/info` | Node and segment counts |
 | `GET /api/health` | Whether the server is up and the graph is loaded |
 
-The site requests `/api/places` and `/api/area` at the same time, so the panel fills in while the slower area is still being built. Recent results are cached by start node. Each visitor gets 30 searches a minute per route.
+The site requests `/api/places` and `/api/area` at the same time, so the panel fills in while the slower area is still being built. Recent results are cached by start node. Each visitor gets 30 searches a minute per route; over that, the API returns 429 with a `Retry-After` header and the panel says how many seconds to wait. On Render the counts are kept in a free Redis-compatible Key Value instance, so they survive the API sleeping; locally they are kept in memory (`server/rate_limit.py`).
 
 Every search prints its timing to the server log, for example `/api/places nearest 1 ms, search 3 ms, places 1 ms (total 5 ms)`, and sends it in a `Server-Timing` header, visible in Chrome's DevTools under Network > Timing.
 
 ## Rebuild the data
 
-The data in `server/data/` is committed, so this is only needed to get newer OpenStreetMap data.
+The data in `server/data/` is committed. A GitHub Actions job (`.github/workflows/refresh-data.yml`) rebuilds it on the 1st of every month: it downloads everything again, checks that no count dropped by more than 15% (`server/scripts/check_data.py`), runs the tests, and commits the new data, which makes Render redeploy. Run it by hand from the repo's **Actions** tab under **Refresh map data**. Its results table is on the run's summary page.
+
+To rebuild by hand:
 
 ```bash
 cd server
@@ -141,14 +146,15 @@ source .venv/bin/activate
 pytest
 ```
 
-The tests cover Dijkstra on small made-up graphs, the grid index against checking every node, the walking area (block interiors filled, nothing over the Hudson, Harlem Meer, or the Reservoir), places and scoring, the API routes, and the rate limit.
+The tests cover Dijkstra on small made-up graphs, the grid index against checking every node, the walking area (block interiors filled, nothing over the Hudson, Harlem Meer, or the Reservoir), places and scoring, the API routes, and the rate limit (with a stand-in for Redis).
 
 ## Deploy (Render, free plan)
 
-`render.yaml` defines two services, created together in the Render dashboard under **New > Blueprint**:
+`render.yaml` defines three services, created together in the Render dashboard under **New > Blueprint**:
 
 - **nyc-15min-api**: the FastAPI server. 512 MB of memory and 0.1 CPU. It sleeps after 15 minutes without visits; the site shows "Waking up the server" while it starts again.
 - **nyc-15min**: the built React site, served as static files. Always on.
+- **nyc-15min-limits**: a free Key Value (Redis-compatible) instance for rate-limit counts, reachable only from the API.
 
 Set these in each service's **Environment** page:
 
