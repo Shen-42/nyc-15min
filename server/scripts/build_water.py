@@ -9,7 +9,6 @@ already handled by trimming to the shoreline, so they're skipped here.
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -19,6 +18,8 @@ from shapely.geometry import mapping
 SERVER_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SERVER_DIR))
 from walk_area import load_land, polygons_only  # noqa: E402
+
+import overpass  # noqa: E402  scripts/overpass.py: server choice and retries
 
 LAND_FILE = SERVER_DIR / "data" / "manhattan-boundary.json"
 OUTPUT_FILE = SERVER_DIR / "data" / "water.json"
@@ -37,16 +38,7 @@ def text(value):
 
 
 def main():
-    ox.settings.log_console = True
-    ox.settings.use_cache = True
-    # Same as build_graph.py: pick another Overpass server if the default is blocked.
-    if os.environ.get("OVERPASS_URL"):
-        ox.settings.overpass_url = os.environ["OVERPASS_URL"]
-    print(f"Using Overpass server: {ox.settings.overpass_url}")
-    # Skip the "how busy are you?" check before the request. Busy servers
-    # sometimes never answer it. Give the real request up to 5 minutes.
-    ox.settings.overpass_rate_limit = False
-    ox.settings.requests_timeout = 300
+    overpass.configure()
 
     land = load_land(LAND_FILE)
     # Ask for a plain rectangle around Manhattan, which servers answer much
@@ -54,7 +46,7 @@ def main():
     # Jersey or the Bronx) are dropped below when each one is cut to the shoreline.
     west, south, east, north = land.bounds
     print("Downloading lakes and ponds around Manhattan...")
-    features = ox.features_from_bbox((west, south, east, north), tags=TAGS)
+    features = overpass.download("lakes and ponds", lambda: ox.features_from_bbox((west, south, east, north), tags=TAGS))
     features = features[features.geom_type.isin(["Polygon", "MultiPolygon"])]
 
     water = []

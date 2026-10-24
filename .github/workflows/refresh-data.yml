@@ -15,15 +15,16 @@ permissions:
 
 jobs:
   refresh:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Pinned so the move of ubuntu-latest to Ubuntu 26 can't change things unexpectedly.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: server
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
           cache: pip
@@ -35,16 +36,16 @@ jobs:
       - name: Save current counts
         run: python scripts/check_data.py --snapshot "$RUNNER_TEMP/before.json"
 
-      # Overpass servers are sometimes busy. Each script gets three tries,
-      # two minutes apart; finished downloads are cached in server/cache.
+      # Public Overpass servers are often busy. Each request retries with
+      # growing waits and alternates servers (see server/scripts/overpass.py).
       - name: Download walking graph
-        run: for i in 1 2 3; do python scripts/build_graph.py && exit 0; sleep 120; done; exit 1
+        run: python scripts/build_graph.py
 
       - name: Download lakes and ponds
-        run: for i in 1 2 3; do python scripts/build_water.py && exit 0; sleep 120; done; exit 1
+        run: python scripts/build_water.py
 
       - name: Download places
-        run: for i in 1 2 3; do python scripts/build_amenities.py && exit 0; sleep 120; done; exit 1
+        run: python scripts/build_amenities.py
 
       - name: Check the new data
         run: python scripts/check_data.py --compare "$RUNNER_TEMP/before.json"

@@ -9,7 +9,6 @@ and does not need OSMnx itself.
 """
 
 import json
-import os
 import time
 from datetime import date
 from pathlib import Path
@@ -18,6 +17,8 @@ import networkx as nx
 import osmnx as ox
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
+
+import overpass  # scripts/overpass.py: server choice and retries
 
 SERVER_DIR = Path(__file__).resolve().parent.parent
 BOUNDARY_FILE = SERVER_DIR.parent / "client" / "src" / "data" / "manhattan-boundary.json"
@@ -42,25 +43,17 @@ def load_area():
 
 
 def main():
-    ox.settings.log_console = True
-    # Saves the raw OpenStreetMap response in ./cache so a second run is fast.
-    ox.settings.use_cache = True
-    # The default Overpass server (overpass-api.de) is blocked from some networks.
-    # To use another one without editing this file, run for example:
-    #   OVERPASS_URL=https://overpass.kumi.systems/api python scripts/build_graph.py
-    if os.environ.get("OVERPASS_URL"):
-        ox.settings.overpass_url = os.environ["OVERPASS_URL"]
-    print(f"Using Overpass server: {ox.settings.overpass_url}")
+    overpass.configure()
 
     area = load_area()
     print("Downloading Manhattan's walkable streets. This can take a few minutes...")
     start = time.time()
-    G = ox.graph_from_polygon(
+    G = overpass.download("walking graph", lambda: ox.graph_from_polygon(
         area,
         network_type="walk",
         retain_all=True,  # keep Roosevelt Island, which has no walking link to Manhattan
         truncate_by_edge=True,
-    )
+    ))
     print(f"Downloaded {len(G.nodes):,} nodes and {len(G.edges):,} edges in {time.time() - start:.0f}s")
 
     keep = set()

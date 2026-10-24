@@ -130,7 +130,7 @@ python scripts/build_water.py      # lakes and ponds
 python scripts/build_amenities.py  # places
 ```
 
-Downloads are cached in `server/cache/`, so a script that fails partway can be run again. If the default Overpass server is busy or blocked, choose another:
+Public Overpass servers are often busy. Each download retries up to six times with growing waits (30 s to 5 minutes), alternating between two servers (`server/scripts/overpass.py`). Finished downloads are cached in `server/cache/`, so a script that fails partway can be run again. If the default servers are blocked where you are, choose another:
 
 ```bash
 OVERPASS_URL=https://overpass.kumi.systems/api python scripts/build_water.py

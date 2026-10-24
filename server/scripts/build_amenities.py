@@ -10,8 +10,8 @@ the script again and only the missing ones are downloaded.
 
 import json
 import math
-import os
 import sys
+import time
 from collections import Counter
 from pathlib import Path
 
@@ -24,6 +24,8 @@ SERVER_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SERVER_DIR))
 from graph import WalkGraph  # noqa: E402
 from walk_area import load_land  # noqa: E402
+
+import overpass  # noqa: E402  scripts/overpass.py: server choice and retries
 
 GRAPH_FILE = SERVER_DIR / "data" / "walk_graph.json"
 LAND_FILE = SERVER_DIR / "data" / "manhattan-boundary.json"
@@ -51,6 +53,9 @@ CATEGORIES = {
     "school": {"tags": {"amenity": "school"}},
     "subway": {"tags": {"railway": "station"}, "keep": is_subway},
 }
+
+# Seconds to wait between the six category downloads.
+PAUSE_BETWEEN_S = 10
 
 # Parks smaller than this are traffic islands and sitting areas, not parks.
 MIN_PARK_M2 = 1_000
@@ -80,13 +85,7 @@ def to_meters(geom):
 
 
 def main():
-    ox.settings.log_console = True
-    ox.settings.use_cache = True
-    ox.settings.overpass_rate_limit = False
-    ox.settings.requests_timeout = 300
-    if os.environ.get("OVERPASS_URL"):
-        ox.settings.overpass_url = os.environ["OVERPASS_URL"]
-    print(f"Using Overpass server: {ox.settings.overpass_url}")
+    overpass.configure()
 
     land = load_land(LAND_FILE)
     west, south, east, north = land.bounds
@@ -104,7 +103,9 @@ def main():
     amenities = []
     for category, spec in CATEGORIES.items():
         print(f"\n--- {category} ---")
-        features = ox.features_from_bbox((west, south, east, north), tags=spec["tags"])
+        if category != next(iter(CATEGORIES)):
+            time.sleep(PAUSE_BETWEEN_S)  # be gentle with the shared server
+        features = overpass.download(category, lambda: ox.features_from_bbox((west, south, east, north), tags=spec["tags"]))
         keep = spec.get("keep")
         kept = 0
         for (element, osm_id), row in features.iterrows():
