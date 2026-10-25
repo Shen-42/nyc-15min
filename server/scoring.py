@@ -52,11 +52,51 @@ def category_score(minutes_sorted, depth):
     return sum(d * decay(t) for d, t in zip(depth, minutes_sorted))
 
 
+# How much each category can matter (card 9): 0 not needed, 1 nice to have,
+# 2 important, 3 essential. The defaults in CATEGORY_SETTINGS use this scale.
+MAX_IMPORTANCE = 3
+
+
+def parse_weights(text):
+    """Turn "grocery:3,school:0" into {"grocery": 3, "school": 0}.
+
+    Categories left out keep their default weight. Raises ValueError with a
+    message meant for the person using the site.
+    """
+    weights = {}
+    for part in (text or "").split(","):
+        if not part.strip():
+            continue
+        name, _, value = part.partition(":")
+        name = name.strip()
+        if name not in CATEGORY_SETTINGS:
+            raise ValueError(f'Unknown category "{name}". Use: {", ".join(CATEGORY_SETTINGS)}.')
+        try:
+            weight = int(value)
+        except ValueError:
+            raise ValueError(f'The weight for {name} must be a whole number from 0 to {MAX_IMPORTANCE}.') from None
+        if not 0 <= weight <= MAX_IMPORTANCE:
+            raise ValueError(f'The weight for {name} must be from 0 to {MAX_IMPORTANCE}.')
+        weights[name] = weight
+    return weights
+
+
+def settings_with_weights(weights):
+    """CATEGORY_SETTINGS with some weights replaced. Raises ValueError if every weight is 0."""
+    settings = {c: {**s, "weight": weights.get(c, s["weight"])} for c, s in CATEGORY_SETTINGS.items()}
+    if not any(s["weight"] for s in settings.values()):
+        raise ValueError("Pick at least one kind of place that matters to you.")
+    return settings
+
+
 def score_walk(reached, settings=CATEGORY_SETTINGS):
     """The overall score for one point.
 
     reached: places the walk reaches, each with "category", "name", and
     "minutes" (the list amenities.reachable_amenities returns).
+    settings: weight and depth per category. A category with weight 0 is
+    still described in the breakdown but left out of the score and of
+    proximity time.
     """
     by_category = {c: [] for c in settings}
     for place in sorted(reached, key=lambda p: p["minutes"]):
@@ -70,13 +110,16 @@ def score_walk(reached, settings=CATEGORY_SETTINGS):
     for category, s in settings.items():
         places = by_category[category]
         sub = category_score([p["minutes"] for p in places], s["depth"])
-        weighted_sum += s["weight"] * sub
-        total_weight += s["weight"]
-        nearest_times.append(places[0]["minutes"] if places else MAX_MINUTES)
+        counted = s["weight"] > 0
+        if counted:
+            weighted_sum += s["weight"] * sub
+            total_weight += s["weight"]
+            nearest_times.append(places[0]["minutes"] if places else MAX_MINUTES)
         categories.append({
             "category": category,
             "score": round(100 * sub),
             "weight": s["weight"],
+            "counted": counted,
             "count": len(places),
             "nearest": [
                 {"name": p["name"], "minutes": p["minutes"]}
@@ -85,10 +128,10 @@ def score_walk(reached, settings=CATEGORY_SETTINGS):
         })
 
     return {
-        "score": round(100 * weighted_sum / total_weight),
-        # Average minutes to the nearest place in each category, adapted from
-        # Bruno et al. (2024). A category with nothing in reach counts as 15.
-        "proximity_minutes": round(sum(nearest_times) / len(nearest_times), 1),
-        "missing": [c["category"] for c in categories if c["count"] == 0],
+        "score": round(100 * weighted_sum / total_weight) if total_weight else 0,
+        # Average minutes to the nearest place in each counted category,
+        # adapted from Bruno et al. (2024). Nothing in reach counts as 15.
+        "proximity_minutes": round(sum(nearest_times) / len(nearest_times), 1) if nearest_times else MAX_MINUTES,
+        "missing": [c["category"] for c in categories if c["counted"] and c["count"] == 0],
         "categories": categories,
     }

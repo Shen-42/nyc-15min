@@ -19,7 +19,7 @@ from shapely.ops import unary_union
 from amenities import load_amenities, reachable_amenities
 from graph import WALK_SPEED_M_PER_MIN, WalkGraph
 from rate_limit import RateLimited, RateLimiter, make_counter
-from scoring import score_walk
+from scoring import parse_weights, score_walk, settings_with_weights
 from walk_area import load_land, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.json"
@@ -212,16 +212,30 @@ def finish(response, path, timer):
 Lat = Query(..., ge=40.6, le=40.95)
 Lng = Query(..., ge=-74.1, le=-73.85)
 Minutes = Query(15, gt=0, le=30)
+# A needs profile (card 9), e.g. "grocery:3,park:3,school:0". Each weight is
+# 0 (not needed) to 3 (essential); categories left out keep their defaults.
+Weights = Query(None, max_length=200)
 
 
 @app.get("/api/places")
-def places(request: Request, response: Response, lat: float = Lat, lng: float = Lng, minutes: float = Minutes):
+def places(
+    request: Request,
+    response: Response,
+    lat: float = Lat,
+    lng: float = Lng,
+    minutes: float = Minutes,
+    weights: str | None = Weights,
+):
     """The score and the places within reach. Cheap, so the panel can fill in
     before the shaded area (the slow part) is ready."""
+    try:
+        settings = settings_with_weights(parse_weights(weights))
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail=str(err))
     timer = StepTimer()
     start, gap_m, budget, times = plan_walk(request, "places", lat, lng, minutes, timer)
     reached = reachable_amenities(amenities, times, minutes - budget)
-    score = score_walk(reached)
+    score = score_walk(reached, settings)
     timer.lap("places")
     finish(response, "/api/places", timer)
     start_lat, start_lng = walk_graph.coords[start]
@@ -245,10 +259,17 @@ def area(request: Request, response: Response, lat: float = Lat, lng: float = Ln
 
 
 @app.get("/api/reachable")
-def reachable(request: Request, response: Response, lat: float = Lat, lng: float = Lng, minutes: float = Minutes):
+def reachable(
+    request: Request,
+    response: Response,
+    lat: float = Lat,
+    lng: float = Lng,
+    minutes: float = Minutes,
+    weights: str | None = Weights,
+):
     """Everything in one response: places, score, and area. The site uses
     /api/places and /api/area instead, so the panel doesn't wait for the area."""
-    result = places(request, response, lat, lng, minutes)
+    result = places(request, response, lat, lng, minutes, weights)
     result["area"] = area(request, response, lat, lng, minutes)["area"]
     return result
 

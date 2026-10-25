@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from scoring import CATEGORY_SETTINGS, category_score, decay, score_walk
+from scoring import CATEGORY_SETTINGS, category_score, decay, parse_weights, score_walk, settings_with_weights
 
 
 def place(category, minutes, name=None):
@@ -63,6 +63,47 @@ def test_breakdown_lists_the_nearest_places_in_order():
     pharmacy = next(c for c in score_walk(reached)["categories"] if c["category"] == "pharmacy")
     assert pharmacy["count"] == 4
     assert [p["name"] for p in pharmacy["nearest"]] == ["A", "B", "C"]  # only the 3 that count
+
+
+def test_parse_weights():
+    assert parse_weights("grocery:3, school:0") == {"grocery": 3, "school": 0}
+    assert parse_weights("") == {}
+    assert parse_weights(None) == {}
+
+
+@pytest.mark.parametrize("bad", ["bakery:2", "grocery:high", "grocery:4", "park:-1"])
+def test_parse_weights_rejects_bad_input(bad):
+    with pytest.raises(ValueError):
+        parse_weights(bad)
+
+
+def test_all_weights_zero_is_refused():
+    with pytest.raises(ValueError):
+        settings_with_weights({c: 0 for c in CATEGORY_SETTINGS})
+
+
+def test_categories_left_out_keep_their_default_weight():
+    settings = settings_with_weights({"park": 3})
+    assert settings["park"]["weight"] == 3
+    assert settings["grocery"]["weight"] == CATEGORY_SETTINGS["grocery"]["weight"]
+
+
+def test_weight_zero_leaves_a_category_out_of_score_and_proximity():
+    # Everything nearby except schools, which are 14 minutes away.
+    reached = [p for p in everything_within(2) if p["category"] != "school"] + [place("school", 14)]
+    default = score_walk(reached)
+    no_schools = score_walk(reached, settings_with_weights({"school": 0}))
+    assert no_schools["score"] > default["score"]
+    assert no_schools["score"] == 100
+    assert no_schools["proximity_minutes"] == 2.0
+    school = next(c for c in no_schools["categories"] if c["category"] == "school")
+    assert school["counted"] is False and school["count"] == 1
+
+
+def test_missing_lists_only_counted_categories():
+    reached = [p for p in everything_within(2) if p["category"] != "school"]
+    assert score_walk(reached)["missing"] == ["school"]
+    assert score_walk(reached, settings_with_weights({"school": 0}))["missing"] == []
 
 
 # On the real data. Skipped until the graph and places have been built.

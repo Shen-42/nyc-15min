@@ -52,3 +52,31 @@ def test_places_and_area_endpoints():
         water = c.get("/api/places", params={"lat": 40.7855, "lng": -73.9628})  # the Reservoir
         assert water.status_code == 422
     rate_limiter.counter.clear()
+
+
+def test_places_takes_a_needs_profile():
+    from pathlib import Path
+
+    import pytest
+
+    if not (Path(__file__).parent / "data" / "walk_graph.json").exists():
+        pytest.skip("run scripts/build_graph.py first")
+    from main import rate_limiter
+
+    rate_limiter.counter.clear()
+    times_square = {"lat": 40.758, "lng": -73.9855}
+    with TestClient(app) as c:
+        parent = c.get("/api/places", params={**times_square, "weights": "park:3,school:3,pharmacy:2,clinic:2"})
+        assert parent.status_code == 200
+        by_id = {cat["category"]: cat for cat in parent.json()["score"]["categories"]}
+        assert by_id["park"]["weight"] == 3 and by_id["grocery"]["weight"] == 3
+
+        no_schools = c.get("/api/places", params={**times_square, "weights": "school:0"})
+        school = next(cat for cat in no_schools.json()["score"]["categories"] if cat["category"] == "school")
+        assert school["counted"] is False
+
+        for bad in ["bakery:2", "grocery:9", "grocery:3,subway:0,pharmacy:0,clinic:0,park:0,school:0,grocery:0"]:
+            res = c.get("/api/places", params={**times_square, "weights": bad})
+            assert res.status_code == 422
+            assert isinstance(res.json()["detail"], str)
+    rate_limiter.counter.clear()

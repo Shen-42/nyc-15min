@@ -3,8 +3,12 @@ import { SLOW_REQUEST_MS, apiFetch } from "./api";
 import ManhattanMap from "./components/ManhattanMap";
 import ResultsPanel from "./components/ResultsPanel";
 import { isInManhattan } from "./data/manhattan";
+import { loadWeights, saveWeights, weightsToQuery } from "./data/profiles";
 
 const MINUTES = 15;
+// Wait this long after the last change to the needs form before re-scoring,
+// so clicking through options sends one request, not five.
+const RESCORE_DELAY_MS = 400;
 
 export default function App() {
   const [serverDown, setServerDown] = useState(false);
@@ -21,8 +25,15 @@ export default function App() {
   const [expanded, setExpanded] = useState(false);
   // True while a request has taken long enough that the server is probably waking up.
   const [waking, setWaking] = useState(false);
+  // How much each kind of place matters (card 9). Remembered by the browser.
+  const [weights, setWeights] = useState(loadWeights);
   // Counts requests so a slow old response can't replace a newer one.
   const latestRequest = useRef(0);
+  // The same for re-scores after the needs form changes.
+  const latestRescore = useRef(0);
+  // Read inside async code, where the state values could be stale.
+  const weightsRef = useRef(weights);
+  const pointRef = useRef(null);
 
   // Wake the server as soon as the page opens, so it's likely ready by the
   // time someone picks a spot.
@@ -37,8 +48,52 @@ export default function App() {
       });
   }, []);
 
+  // When the needs form changes: remember it, and re-score the current spot.
+  // Only the score and places are asked for again; the shaded area doesn't
+  // depend on weights, so it stays as it is.
+  useEffect(() => {
+    weightsRef.current = weights;
+    saveWeights(weights);
+    if (!pointRef.current) return;
+    const timer = setTimeout(rescore, RESCORE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [weights]);
+
+  function placesQuery(point) {
+    return `lat=${point[0]}&lng=${point[1]}&minutes=${MINUTES}&weights=${weightsToQuery(weightsRef.current)}`;
+  }
+
+  async function rescore() {
+    const point = pointRef.current;
+    const searchId = latestRequest.current;
+    const rescoreId = ++latestRescore.current;
+    // A new click, or a newer re-score, makes this one out of date.
+    const current = () => searchId === latestRequest.current && rescoreId === latestRescore.current;
+    setStatus("loading");
+    try {
+      const res = await apiFetch(`/api/places?${placesQuery(point)}`);
+      if (!current()) return;
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const text = typeof body.detail === "string" ? body.detail : `Couldn't update the score (error ${res.status}).`;
+        setMessage({ kind: "warn", text });
+        return;
+      }
+      const data = await res.json();
+      if (!current()) return;
+      setMessage(null);
+      setResult((r) => (r?.id === searchId ? { ...r, places: data.amenities, score: data.score } : r));
+    } catch {
+      if (current()) setServerDown(true);
+    } finally {
+      if (current()) setStatus("done");
+    }
+  }
+
   async function findWalkingArea(point) {
     const requestId = ++latestRequest.current;
+    latestRescore.current++; // a pending re-score is for the old spot
+    pointRef.current = point;
     const query = `lat=${point[0]}&lng=${point[1]}&minutes=${MINUTES}`;
     setStatus("loading");
     setMessage(null);
@@ -53,7 +108,7 @@ export default function App() {
       .catch(() => null);
 
     try {
-      const res = await apiFetch(`/api/places?${query}`);
+      const res = await apiFetch(`/api/places?${placesQuery(point)}`);
       if (requestId !== latestRequest.current) return;
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -107,6 +162,7 @@ export default function App() {
       findWalkingArea(point);
     } else {
       latestRequest.current++; // ignore any search still in flight
+      pointRef.current = null;
       setSelectedPoint(null);
       setResult(null);
       setStatus("idle");
@@ -126,6 +182,8 @@ export default function App() {
         onFocus={setFocus}
         expanded={expanded}
         onToggleExpanded={() => setExpanded((open) => !open)}
+        weights={weights}
+        onWeightsChange={setWeights}
       />
       <div className="map-wrap" data-focus={focus ?? undefined}>
         <ManhattanMap

@@ -31,6 +31,17 @@ Click any point in Manhattan to see everywhere you can walk in 15 minutes, which
 
    The decay shape follows Yang et al. (2023), who scored Shanghai's 15-minute life circles. Counting several places per category and weighting groceries highest follow Walk Score. Both use full points up to 5 minutes, which scored almost all of Manhattan 97–99, so this version uses 3 minutes and counts more places. Across 150 random points the median is 78. The panel also shows proximity time, the average minutes to the nearest place in each category, adapted from Bruno et al. (2024).
 
+7. **Your needs.** The weights above are the defaults. Under "Your needs" in the panel, anyone can start from a preset (Student, Parent, Retiree) and set each category to Not needed, Nice to have, Important, or Essential, which are weights 0 to 3. A category set to Not needed is still listed but is left out of the score and of proximity time. Changing a setting re-requests only the score, not the shaded area, and the browser remembers the choice.
+
+   | Preset | Groceries | Subway | Pharmacies | Doctors | Parks | Schools |
+   | --- | --- | --- | --- | --- | --- | --- |
+   | Default | 3 | 2 | 1 | 1 | 1 | 1 |
+   | Student | 3 | 3 | 1 | 1 | 2 | 0 |
+   | Parent | 3 | 2 | 2 | 2 | 3 | 3 |
+   | Retiree | 3 | 2 | 3 | 3 | 2 | 0 |
+
+   The presets are my own judgment calls, not survey results.
+
 ## Stack
 
 | Part | Tools |
@@ -110,6 +121,8 @@ All routes take `lat`, `lng`, and optionally `minutes` (default 15, at most 30).
 | `GET /api/nearest-node` | The graph node closest to a point |
 | `GET /api/graph/info` | Node and segment counts |
 | `GET /api/health` | Whether the server is up and the graph is loaded |
+
+`/api/places` and `/api/reachable` also take `weights`, for example `weights=grocery:3,park:3,school:0`. Each weight is a whole number from 0 to 3, and categories left out keep their defaults. An unknown category, a weight out of range, or all weights at 0 returns 422 with a message saying what to fix.
 
 The site requests `/api/places` and `/api/area` at the same time, so the panel fills in while the slower area is still being built. Recent results are cached by start node. Each visitor gets 30 searches a minute per route; over that, the API returns 429 with a `Retry-After` header and the panel says how many seconds to wait. On Render the counts are kept in a free Redis-compatible Key Value instance, so they survive the API sleeping; locally they are kept in memory (`server/rate_limit.py`).
 

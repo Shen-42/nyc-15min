@@ -1,5 +1,6 @@
 import { CATEGORIES, verdict } from "../data/categories";
 import CategoryRow from "./CategoryRow";
+import NeedsProfile from "./NeedsProfile";
 
 export default function ResultsPanel({
   status,
@@ -11,6 +12,8 @@ export default function ResultsPanel({
   onFocus,
   expanded,
   onToggleExpanded,
+  weights,
+  onWeightsChange,
 }) {
   const loading = status === "loading";
   const categoryById = Object.fromEntries((result?.score.categories ?? []).map((c) => [c.category, c]));
@@ -45,6 +48,8 @@ export default function ResultsPanel({
         )}
       </div>
 
+      {/* The score and the list are faded while a new search runs. The needs
+          form sits between them, next to the score it changes, and never fades. */}
       {result && (
         <div className="panel__results" aria-busy={loading}>
           <div className="score-summary">
@@ -58,7 +63,13 @@ export default function ResultsPanel({
               The nearest of each is {result.score.proximity_minutes} minutes away on average.
             </p>
           </div>
+        </div>
+      )}
 
+      <NeedsProfile weights={weights} onChange={onWeightsChange} />
+
+      {result && (
+        <div className="panel__results" aria-busy={loading}>
           <button
             type="button"
             className="panel__toggle"
