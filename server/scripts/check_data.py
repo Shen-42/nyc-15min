@@ -51,6 +51,10 @@ def current_counts():
     }
     for category, label in LABELS.items():
         counts[label] = by_category[category]
+    ramps_file = DATA / "ramps.json"
+    if ramps_file.exists():
+        meta = json.loads(ramps_file.read_text())["meta"]
+        counts["curb ramps"] = meta["ramps"]
     return counts
 
 

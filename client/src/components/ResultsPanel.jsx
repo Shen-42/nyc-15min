@@ -19,6 +19,8 @@ export default function ResultsPanel({
   hour,
   onHourChange,
   timeLabel,
+  mode,
+  onModeChange,
 }) {
   const loading = status === "loading";
   const categoryById = Object.fromEntries((result?.score.categories ?? []).map((c) => [c.category, c]));
@@ -65,8 +67,18 @@ export default function ResultsPanel({
               {verdict(result.score.score)}
             </p>
             <p className="score-summary__detail">
+              {result.mode === "wheelchair" && "Within 15 minutes by wheelchair. "}
               The nearest of each is {result.score.proximity_minutes} minutes away on average.
               {timeLabel && ` Counting places open at ${timeLabel}.`}
+              {result.mode === "wheelchair" && result.barriers.length > 0 && (
+                <>
+                  {" "}
+                  {result.barriers.length === 1 ? "1 corner" : `${result.barriers.length} corners`} in reach{" "}
+                  {result.barriers.length === 1 ? "has" : "have"} no listed curb ramp (
+                  <span className="barrier-key" aria-hidden="true" />
+                  <span className="visually-hidden">dark diamonds</span> on the map).
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -75,7 +87,7 @@ export default function ResultsPanel({
       {/* One group, so the two settings stack without the panel's gap between them. */}
       <div className="settings">
         <TimeOfDay hour={hour} onChange={onHourChange} />
-        <NeedsProfile weights={weights} onChange={onWeightsChange} />
+        <NeedsProfile weights={weights} onChange={onWeightsChange} mode={mode} onModeChange={onModeChange} />
       </div>
 
       {result && (

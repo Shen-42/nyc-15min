@@ -82,3 +82,28 @@ export function saveWeights(weights) {
     // Nothing to do: the profile just won't be remembered next visit.
   }
 }
+
+// How you get around (card 11). Wheelchair mode is slower, and corners with
+// no curb ramp cost extra minutes (see server/modes.py).
+export const MODES = [
+  { id: "walk", label: "Walking" },
+  { id: "wheelchair", label: "Wheelchair" },
+];
+
+const MODE_KEY = "nyc15min.mode";
+
+export function loadMode() {
+  try {
+    return localStorage.getItem(MODE_KEY) === "wheelchair" ? "wheelchair" : "walk";
+  } catch {
+    return "walk";
+  }
+}
+
+export function saveMode(mode) {
+  try {
+    localStorage.setItem(MODE_KEY, mode);
+  } catch {
+    // Not remembered next visit; nothing else to do.
+  }
+}

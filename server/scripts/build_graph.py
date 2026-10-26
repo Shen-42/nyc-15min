@@ -10,6 +10,7 @@ and does not need OSMnx itself.
 
 import json
 import time
+from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
@@ -30,6 +31,12 @@ LAND = ["main", "roosevelt"]
 # Grow the outline by about 50 m so waterfront paths and piers aren't cut off.
 BUFFER_DEGREES = 0.0005
 
+# Streets that cars use, so crossing them means stepping off a curb (card 11).
+STREET_TYPES = {
+    "trunk", "trunk_link", "primary", "primary_link", "secondary", "secondary_link",
+    "tertiary", "tertiary_link", "residential", "unclassified", "living_street",
+}
+
 # Drop disconnected bits of the graph smaller than this, such as a path on a
 # pier or inside a courtyard that doesn't connect to any street.
 MIN_COMPONENT_NODES = 50
@@ -42,8 +49,34 @@ def load_area():
     return unary_union(polygons).buffer(BUFFER_DEGREES)
 
 
+def as_set(value):
+    """OSMnx gives a tag as a string, or a list when merged ways disagree."""
+    if value is None:
+        return set()
+    return set(value) if isinstance(value, list) else {value}
+
+
+def curb_nodes(G):
+    """Nodes where a wheelchair user has to get off or onto a curb (card 11):
+    street intersections (three or more street segments meet), and both ends
+    of a mapped crosswalk (footway=crossing)."""
+    street_neighbors = defaultdict(set)
+    crossings = set()
+    for u, v, d in G.edges(data=True):
+        if as_set(d.get("highway")) & STREET_TYPES:
+            street_neighbors[u].add(v)
+            street_neighbors[v].add(u)
+        if "crossing" in as_set(d.get("footway")):
+            crossings |= {u, v}
+    intersections = {n for n, nbrs in street_neighbors.items() if len(nbrs) >= 3}
+    return sorted(int(n) for n in intersections | crossings)
+
+
 def main():
     overpass.configure()
+    # Keep the footway tag, which OSMnx drops by default, to find crosswalks.
+    # A cached download already has every tag, so this needs no new download.
+    ox.settings.useful_tags_way = list(ox.settings.useful_tags_way) + ["footway"]
 
     area = load_area()
     print("Downloading Manhattan's walkable streets. This can take a few minutes...")
@@ -83,6 +116,9 @@ def main():
             between = [[round(y, 6), round(x, 6)] for x, y in geom.coords[1:-1]] if geom is not None else []
             best[key] = (d["length"], u, v, between)
 
+    curbs = curb_nodes(G)
+    print(f"Found {len(curbs):,} street corners and crosswalk ends")
+
     edges = []
     for length, u, v, between in best.values():
         edge = [int(u), int(v), round(length, 1)]
@@ -100,9 +136,11 @@ def main():
                     "built": date.today().isoformat(),
                     "node_count": len(nodes),
                     "edge_count": len(edges),
+                    "curb_count": len(curbs),
                 },
                 "nodes": nodes,  # [id, lat, lng]
                 "edges": edges,  # [node_a, node_b, length_m, optional points between]
+                "curb_nodes": curbs,  # nodes where you step off a curb (card 11)
             },
             separators=(",", ":"),
         )

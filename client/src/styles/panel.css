@@ -374,3 +374,14 @@
     transition: width 300ms ease-out;
   }
 }
+
+/* The dark diamond, drawn inline in the score sentence as a map key (card 11). */
+.barrier-key {
+  display: inline-block;
+  width: 0.6em;
+  height: 0.6em;
+  margin: 0 0.15em;
+  transform: rotate(45deg);
+  background: var(--color-ink);
+  vertical-align: 0.05em;
+}

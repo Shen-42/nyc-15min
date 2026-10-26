@@ -113,11 +113,15 @@ class WalkGraph:
                 break
         return best_id, best_dist
 
-    def reachable_within(self, start, max_minutes):
+    def reachable_within(self, start, max_minutes, speed_m_per_min=WALK_SPEED_M_PER_MIN, node_penalty=None):
         """Every node you can walk to from `start` within `max_minutes`.
 
         Returns a dict {node_id: minutes to walk there}, including the start
         node at 0. Nodes farther than max_minutes are left out.
+
+        speed_m_per_min: walking pace by default; slower for a wheelchair (card 11).
+        node_penalty: optional {node_id: extra minutes} added when passing
+        through a node, such as a corner with no curb ramp (card 11).
 
         This is Dijkstra's algorithm with a cutoff. One way to write it:
 
@@ -151,7 +155,9 @@ class WalkGraph:
                 continue
 
             for neighbor, length_m in self.neighbors(node):
-                new_minutes = minutes + length_m / WALK_SPEED_M_PER_MIN
+                new_minutes = minutes + length_m / speed_m_per_min
+                if node_penalty:
+                    new_minutes += node_penalty.get(neighbor, 0)
                 if new_minutes > max_minutes:
                     continue  # too far
                 if neighbor not in best or new_minutes < best[neighbor]:

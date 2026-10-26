@@ -90,3 +90,30 @@
   font-family: var(--font-body);
   font-size: var(--text-sm);
 }
+
+/* Corners with no listed curb ramp (card 11): a diamond, unlike the round
+   place markers, so shape carries the meaning as well as color. */
+.barrier-marker__shape {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  margin: 2px;
+  transform: rotate(45deg);
+  background: var(--color-ink);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+}
+
+.barrier-marker__shape > span {
+  transform: rotate(-45deg);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* When a category row is selected, corners fade with the other markers. */
+.map-wrap[data-focus] .barrier-marker {
+  opacity: 0.2;
+}

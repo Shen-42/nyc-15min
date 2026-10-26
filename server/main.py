@@ -17,8 +17,9 @@ from shapely.geometry import Point
 from shapely.ops import unary_union
 
 from amenities import load_amenities, reachable_amenities
-from graph import WALK_SPEED_M_PER_MIN, WalkGraph
+from graph import WalkGraph
 from hours import parse_at, status_at
+from modes import NO_RAMP_PENALTY_MIN, SPEEDS, load_no_ramp_nodes, parse_mode
 from rate_limit import RateLimited, RateLimiter, make_counter
 from scoring import parse_weights, score_walk, settings_with_weights
 from walk_area import load_land, load_water, walking_area
@@ -27,6 +28,7 @@ GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.json"
 LAND_FILE = Path(__file__).parent / "data" / "manhattan-boundary.json"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
 AMENITIES_FILE = Path(__file__).parent / "data" / "amenities.json"
+RAMPS_FILE = Path(__file__).parent / "data" / "ramps.json"
 
 # Clicks farther than this from any street or path (the middle of a lake or a
 # rail yard) are turned away instead of starting from a far-off path.
@@ -43,11 +45,14 @@ water = []
 amenities = []
 # The same places by id, for looking up opening hours.
 amenity_by_id = {}
+# Street corners with no curb ramp, and the extra minutes each costs in a
+# wheelchair (card 11). Empty if the ramps file hasn't been built.
+ramp_penalty = {}
 
 
 @asynccontextmanager
 async def lifespan(app):
-    global walk_graph, land, water, amenities, amenity_by_id
+    global walk_graph, land, water, amenities, amenity_by_id, ramp_penalty
     if AMENITIES_FILE.exists():
         amenities = load_amenities(AMENITIES_FILE)
         amenity_by_id = {a["id"]: a for a in amenities}
@@ -64,6 +69,11 @@ async def lifespan(app):
         land = load_land(LAND_FILE)
         if water:
             land = land.difference(unary_union([shape for _, shape in water]))
+    if RAMPS_FILE.exists():
+        ramp_penalty = {n: NO_RAMP_PENALTY_MIN for n in load_no_ramp_nodes(RAMPS_FILE)}
+        print(f"Loaded {len(ramp_penalty):,} corners with no curb ramp")
+    else:
+        print(f"No ramps file at {RAMPS_FILE}. Wheelchair mode will only be slower. Run: python scripts/build_ramps.py")
     if GRAPH_FILE.exists():
         walk_graph = WalkGraph.from_file(GRAPH_FILE)
         print(f"Loaded walking graph: {len(walk_graph):,} nodes, {walk_graph.edge_count:,} edges")
@@ -157,8 +167,9 @@ def check_rate_limit(key):
         )
 
 
-def plan_walk(request, kind, lat, lng, minutes, timer):
+def plan_walk(request, kind, lat, lng, minutes, timer, mode="walk"):
     """The shared first half of every search: checks, nearest node, Dijkstra.
+    mode is "walk" or "wheelchair" (card 11).
 
     Returns (start node, meters from the click to it, minutes left for the
     walk itself, {node: minutes}).
@@ -184,10 +195,10 @@ def plan_walk(request, kind, lat, lng, minutes, timer):
     # The click is usually a few meters from the nearest node. Count that
     # walk too, so the search gets slightly less time. Rounded so nearby
     # clicks share cached results.
-    budget = round(minutes - gap_m / WALK_SPEED_M_PER_MIN, 1)
+    budget = round(minutes - gap_m / SPEEDS[mode], 1)
 
     try:
-        times = cached_search(start, budget)
+        times = cached_search(start, budget, mode)
     except NotImplementedError:
         raise HTTPException(status_code=501, detail="The 15-minute search isn't written yet (graph.py, reachable_within).")
     timer.lap("search")
@@ -198,13 +209,15 @@ def plan_walk(request, kind, lat, lng, minutes, timer):
 # (or the same spot clicked twice) are answered without redoing the work.
 # 512 areas take roughly 20 MB, well inside the free plan's 512 MB.
 @lru_cache(maxsize=512)
-def cached_search(start, budget):
+def cached_search(start, budget, mode="walk"):
+    if mode == "wheelchair":
+        return walk_graph.reachable_within(start, budget, SPEEDS["wheelchair"], ramp_penalty)
     return walk_graph.reachable_within(start, budget)
 
 
 @lru_cache(maxsize=512)
-def cached_area(start, budget):
-    return walking_area(walk_graph, start, cached_search(start, budget), budget, WALK_SPEED_M_PER_MIN, land)
+def cached_area(start, budget, mode="walk"):
+    return walking_area(walk_graph, start, cached_search(start, budget, mode), budget, SPEEDS[mode], land)
 
 
 def finish(response, path, timer):
@@ -223,6 +236,12 @@ Weights = Query(None, max_length=200)
 # A time to check opening hours at (card 10), New York time, e.g.
 # "2026-10-26T21:00". Left out, every place counts whatever its hours.
 At = Query(None, max_length=16)
+# "walk" (the default) or "wheelchair" (card 11): slower, and corners
+# without curb ramps cost extra minutes.
+Mode = Query("walk", max_length=12)
+
+# At most this many no-ramp corners go back to the map.
+MAX_BARRIERS = 300
 
 
 @app.get("/api/places")
@@ -234,16 +253,18 @@ def places(
     minutes: float = Minutes,
     weights: str | None = Weights,
     at: str | None = At,
+    mode: str = Mode,
 ):
     """The score and the places within reach. Cheap, so the panel can fill in
     before the shaded area (the slow part) is ready."""
     try:
         settings = settings_with_weights(parse_weights(weights))
         at_time = parse_at(at) if at else None
+        mode = parse_mode(mode)
     except ValueError as err:
         raise HTTPException(status_code=422, detail=str(err))
     timer = StepTimer()
-    start, gap_m, budget, times = plan_walk(request, "places", lat, lng, minutes, timer)
+    start, gap_m, budget, times = plan_walk(request, "places", lat, lng, minutes, timer, mode)
     reached = reachable_amenities(amenities, times, minutes - budget)
     if at_time:
         for place in reached:
@@ -257,17 +278,39 @@ def places(
         "start": {"node_id": start, "lat": start_lat, "lng": start_lng, "distance_m": round(gap_m, 1)},
         "minutes": minutes,
         "at": at,
+        "mode": mode,
         "amenities": reached,  # closest first; with "status" when a time was given
+        "barriers": barriers_reached(times, minutes - budget) if mode == "wheelchair" else [],
         "score": score,
     }
 
 
+def barriers_reached(times, offset):
+    """Corners with no curb ramp that the search reached, closest first."""
+    reached = sorted((times[n] + offset, n) for n in ramp_penalty if n in times)
+    return [
+        {"lat": walk_graph.coords[n][0], "lng": walk_graph.coords[n][1], "minutes": round(t, 1)}
+        for t, n in reached[:MAX_BARRIERS]
+    ]
+
+
 @app.get("/api/area")
-def area(request: Request, response: Response, lat: float = Lat, lng: float = Lng, minutes: float = Minutes):
+def area(
+    request: Request,
+    response: Response,
+    lat: float = Lat,
+    lng: float = Lng,
+    minutes: float = Minutes,
+    mode: str = Mode,
+):
     """The shaded walking area as a GeoJSON geometry. The slow part of a search."""
+    try:
+        mode = parse_mode(mode)
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail=str(err))
     timer = StepTimer()
-    start, _, budget, _ = plan_walk(request, "area", lat, lng, minutes, timer)
-    geometry = cached_area(start, budget)
+    start, _, budget, _ = plan_walk(request, "area", lat, lng, minutes, timer, mode)
+    geometry = cached_area(start, budget, mode)
     timer.lap("area")
     finish(response, "/api/area", timer)
     return {"area": geometry}
@@ -282,11 +325,12 @@ def reachable(
     minutes: float = Minutes,
     weights: str | None = Weights,
     at: str | None = At,
+    mode: str = Mode,
 ):
     """Everything in one response: places, score, and area. The site uses
     /api/places and /api/area instead, so the panel doesn't wait for the area."""
-    result = places(request, response, lat, lng, minutes, weights, at)
-    result["area"] = area(request, response, lat, lng, minutes)["area"]
+    result = places(request, response, lat, lng, minutes, weights, at, mode)
+    result["area"] = area(request, response, lat, lng, minutes, mode)["area"]
     return result
 
 

@@ -52,6 +52,10 @@ jobs:
       - name: Download places
         run: python scripts/build_amenities.py
 
+      # NYC Open Data, not Overpass. Needs the new graph's street corners.
+      - name: Download curb ramps
+        run: python scripts/build_ramps.py
+
       - name: Check the new data
         run: python scripts/check_data.py --compare "$RUNNER_TEMP/before.json"
 

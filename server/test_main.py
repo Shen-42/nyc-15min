@@ -106,3 +106,29 @@ def test_places_checks_opening_hours_at_a_time():
         bad = c.get("/api/places", params={**times_square, "at": "9pm"})
         assert bad.status_code == 422 and isinstance(bad.json()["detail"], str)
     rate_limiter.counter.clear()
+
+
+def test_wheelchair_mode_reaches_less_and_rejects_unknown_modes():
+    from pathlib import Path
+
+    import pytest
+
+    if not (Path(__file__).parent / "data" / "walk_graph.json").exists():
+        pytest.skip("run scripts/build_graph.py first")
+    from main import rate_limiter
+
+    rate_limiter.counter.clear()
+    times_square = {"lat": 40.758, "lng": -73.9855}
+    with TestClient(app) as c:
+        walk = c.get("/api/places", params=times_square).json()
+        chair = c.get("/api/places", params={**times_square, "mode": "wheelchair"}).json()
+        assert chair["mode"] == "wheelchair" and walk["barriers"] == []
+        assert len(chair["amenities"]) < len(walk["amenities"])
+        assert all({"lat", "lng", "minutes"} <= set(b) for b in chair["barriers"])
+
+        area = c.get("/api/area", params={**times_square, "mode": "wheelchair"})
+        assert area.status_code == 200
+
+        bad = c.get("/api/places", params={**times_square, "mode": "skateboard"})
+        assert bad.status_code == 422 and isinstance(bad.json()["detail"], str)
+    rate_limiter.counter.clear()

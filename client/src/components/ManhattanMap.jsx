@@ -16,6 +16,7 @@ import {
   OUTER_RING,
   COMING_SOON_LABELS,
 } from "../data/manhattan";
+import BarrierMarkers from "./BarrierMarkers";
 import PlaceMarkers from "./PlaceMarkers";
 
 // Text labels for the other boroughs. divIcon draws HTML instead of an image.
@@ -50,7 +51,7 @@ function ClickHandler({ onMapClick }) {
 }
 
 // Colors for the shapes below come from styles/map.css, by class name.
-export default function ManhattanMap({ selectedPoint, area, areaKey, places, onMapClick }) {
+export default function ManhattanMap({ selectedPoint, area, areaKey, places, barriers = [], onMapClick }) {
   return (
     <MapContainer
       className="map"
@@ -91,6 +92,7 @@ export default function ManhattanMap({ selectedPoint, area, areaKey, places, onM
           the dot moves, which happens before the result is back. */}
       {area && <GeoJSON key={areaKey} data={area} className="walk-area" interactive={false} />}
 
+      <BarrierMarkers barriers={barriers} />
       <PlaceMarkers places={places} />
 
       {selectedPoint && (

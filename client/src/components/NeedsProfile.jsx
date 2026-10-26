@@ -1,9 +1,9 @@
 import { CATEGORIES } from "../data/categories";
-import { IMPORTANCE, PRESETS, hasAnyWeight, matchingPreset } from "../data/profiles";
+import { IMPORTANCE, MODES, PRESETS, hasAnyWeight, matchingPreset } from "../data/profiles";
 
-// "Your needs": pick a preset, then set how much each kind of place matters.
-// A native <details> keeps it out of the way until someone opens it.
-export default function NeedsProfile({ weights, onChange }) {
+// "Your needs": how you get around, then a preset, then how much each kind
+// of place matters. A native <details> keeps it out of the way until opened.
+export default function NeedsProfile({ weights, onChange, mode, onModeChange }) {
   const preset = matchingPreset(weights);
 
   function setWeight(id, value) {
@@ -15,10 +15,29 @@ export default function NeedsProfile({ weights, onChange }) {
   return (
     <details className="needs">
       <summary className="needs__summary">
-        Your needs: <span className="needs__current">{preset ? preset.label : "Custom"}</span>
+        Your needs:{" "}
+        <span className="needs__current">
+          {preset ? preset.label : "Custom"}
+          {mode === "wheelchair" && ", wheelchair"}
+        </span>
       </summary>
 
       <div className="needs__body">
+        <fieldset className="needs__presets">
+          <legend className="needs__legend">How you get around</legend>
+          {MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              className="needs__preset"
+              aria-pressed={mode === m.id}
+              onClick={() => onModeChange(m.id)}
+            >
+              {m.label}
+            </button>
+          ))}
+        </fieldset>
+
         <fieldset className="needs__presets">
           <legend className="needs__legend">Start from</legend>
           {PRESETS.map((p) => (

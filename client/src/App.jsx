@@ -3,7 +3,7 @@ import { SLOW_REQUEST_MS, apiFetch } from "./api";
 import ManhattanMap from "./components/ManhattanMap";
 import ResultsPanel from "./components/ResultsPanel";
 import { isInManhattan } from "./data/manhattan";
-import { loadWeights, saveWeights, weightsToQuery } from "./data/profiles";
+import { loadMode, loadWeights, saveMode, saveWeights, weightsToQuery } from "./data/profiles";
 import { atQuery, formatHour, nycNow } from "./data/time";
 
 const MINUTES = 15;
@@ -31,6 +31,8 @@ export default function App() {
   // The hour to check opening hours at (card 10), New York time, or null
   // for any time. Not remembered: "9 pm" means today's 9 pm.
   const [hour, setHour] = useState(null);
+  // "walk" or "wheelchair" (card 11). Remembered by the browser.
+  const [mode, setMode] = useState(loadMode);
   // Counts requests so a slow old response can't replace a newer one.
   const latestRequest = useRef(0);
   // The same for re-scores after the needs form changes.
@@ -38,6 +40,7 @@ export default function App() {
   // Read inside async code, where the state values could be stale.
   const weightsRef = useRef(weights);
   const hourRef = useRef(hour);
+  const modeRef = useRef(mode);
   const pointRef = useRef(null);
 
   // Wake the server as soon as the page opens, so it's likely ready by the
@@ -66,9 +69,22 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [weights, hour]);
 
+  // A new way of getting around changes the shaded area too, so search again in full.
+  useEffect(() => {
+    modeRef.current = mode;
+    saveMode(mode);
+    if (pointRef.current) findWalkingArea(pointRef.current);
+  }, [mode]);
+
+  // lat, lng, minutes, and the mode: what both requests share.
+  function baseQuery(point) {
+    const how = modeRef.current === "wheelchair" ? "&mode=wheelchair" : "";
+    return `lat=${point[0]}&lng=${point[1]}&minutes=${MINUTES}${how}`;
+  }
+
   function placesQuery(point) {
     const at = hourRef.current === null ? "" : `&at=${atQuery(hourRef.current)}`;
-    return `lat=${point[0]}&lng=${point[1]}&minutes=${MINUTES}&weights=${weightsToQuery(weightsRef.current)}${at}`;
+    return `${baseQuery(point)}&weights=${weightsToQuery(weightsRef.current)}${at}`;
   }
 
   async function rescore() {
@@ -90,7 +106,9 @@ export default function App() {
       const data = await res.json();
       if (!current()) return;
       setMessage(null);
-      setResult((r) => (r?.id === searchId ? { ...r, places: data.amenities, score: data.score } : r));
+      setResult((r) =>
+        r?.id === searchId ? { ...r, places: data.amenities, score: data.score, barriers: data.barriers ?? [] } : r
+      );
     } catch {
       if (current()) setServerDown(true);
     } finally {
@@ -102,7 +120,7 @@ export default function App() {
     const requestId = ++latestRequest.current;
     latestRescore.current++; // a pending re-score is for the old spot
     pointRef.current = point;
-    const query = `lat=${point[0]}&lng=${point[1]}&minutes=${MINUTES}`;
+    const query = baseQuery(point);
     setStatus("loading");
     setMessage(null);
     const slow = setTimeout(() => {
@@ -136,7 +154,14 @@ export default function App() {
       if (requestId !== latestRequest.current) return;
       // Show the score and places now. The old area is cleared so it never
       // sits under the new dot.
-      setResult({ id: requestId, area: null, places: data.amenities, score: data.score });
+      setResult({
+        id: requestId,
+        area: null,
+        places: data.amenities,
+        score: data.score,
+        mode: data.mode ?? "walk",
+        barriers: data.barriers ?? [],
+      });
       setServerDown(false);
       setStatus("done");
     } catch {
@@ -195,6 +220,8 @@ export default function App() {
         hour={hour}
         onHourChange={setHour}
         timeLabel={hour === null ? null : `${formatHour(hour)} on ${nycNow().weekday}`}
+        mode={mode}
+        onModeChange={setMode}
       />
       <div className="map-wrap" data-focus={focus ?? undefined}>
         <ManhattanMap
@@ -203,6 +230,7 @@ export default function App() {
           areaKey={result?.id}
           // Closed places leave the map; the panel still lists them.
           places={(result?.places ?? []).filter((p) => p.status !== "closed")}
+          barriers={result?.barriers ?? []}
           onMapClick={handleMapClick}
         />
       </div>

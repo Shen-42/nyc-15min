@@ -61,6 +61,23 @@ def test_disconnected_nodes_are_not_reached():
     assert set(g.reachable_within(1, 15)) == {1, 2}
 
 
+def test_slower_speed_takes_longer():
+    # A wheelchair at 48 m a minute takes 80/48 times as long (card 11).
+    g = WalkGraph([[1, 0, 0], [2, 0, 0]], [[1, 2, 5 * M]])
+    assert g.reachable_within(1, 15, speed_m_per_min=48)[2] == pytest.approx(5 * M / 48)
+
+
+def test_node_penalty_adds_minutes_and_can_change_the_route():
+    # 1 -> 2 -> 4 is 2 minutes but 2 has no ramp (+3); 1 -> 3 -> 4 is 4 minutes.
+    g = WalkGraph(
+        [[1, 0, 0], [2, 0, 0], [3, 0, 0], [4, 0, 0]],
+        [[1, 2, 1 * M], [2, 4, 1 * M], [1, 3, 2 * M], [3, 4, 2 * M]],
+    )
+    times = g.reachable_within(1, 15, node_penalty={2: 3})
+    assert times[2] == pytest.approx(4)
+    assert times[4] == pytest.approx(4)  # around, not through 2
+
+
 # On the real Manhattan graph. Skipped if the graph file is missing.
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.json"
 
