@@ -18,6 +18,7 @@ from shapely.ops import unary_union
 
 from amenities import load_amenities, reachable_amenities
 from graph import WALK_SPEED_M_PER_MIN, WalkGraph
+from hours import parse_at, status_at
 from rate_limit import RateLimited, RateLimiter, make_counter
 from scoring import parse_weights, score_walk, settings_with_weights
 from walk_area import load_land, load_water, walking_area
@@ -40,14 +41,18 @@ land = None
 water = []
 # Groceries, pharmacies, clinics, parks, schools, and subway stations.
 amenities = []
+# The same places by id, for looking up opening hours.
+amenity_by_id = {}
 
 
 @asynccontextmanager
 async def lifespan(app):
-    global walk_graph, land, water, amenities
+    global walk_graph, land, water, amenities, amenity_by_id
     if AMENITIES_FILE.exists():
         amenities = load_amenities(AMENITIES_FILE)
-        print(f"Loaded {len(amenities):,} places")
+        amenity_by_id = {a["id"]: a for a in amenities}
+        with_hours = sum(1 for a in amenities if a.get("hours"))
+        print(f"Loaded {len(amenities):,} places ({with_hours:,} with opening hours)")
     else:
         print(f"No places file at {AMENITIES_FILE}. Run: python scripts/build_amenities.py")
     if WATER_FILE.exists():
@@ -215,6 +220,9 @@ Minutes = Query(15, gt=0, le=30)
 # A needs profile (card 9), e.g. "grocery:3,park:3,school:0". Each weight is
 # 0 (not needed) to 3 (essential); categories left out keep their defaults.
 Weights = Query(None, max_length=200)
+# A time to check opening hours at (card 10), New York time, e.g.
+# "2026-10-26T21:00". Left out, every place counts whatever its hours.
+At = Query(None, max_length=16)
 
 
 @app.get("/api/places")
@@ -225,16 +233,22 @@ def places(
     lng: float = Lng,
     minutes: float = Minutes,
     weights: str | None = Weights,
+    at: str | None = At,
 ):
     """The score and the places within reach. Cheap, so the panel can fill in
     before the shaded area (the slow part) is ready."""
     try:
         settings = settings_with_weights(parse_weights(weights))
+        at_time = parse_at(at) if at else None
     except ValueError as err:
         raise HTTPException(status_code=422, detail=str(err))
     timer = StepTimer()
     start, gap_m, budget, times = plan_walk(request, "places", lat, lng, minutes, timer)
     reached = reachable_amenities(amenities, times, minutes - budget)
+    if at_time:
+        for place in reached:
+            place["status"] = status_at(amenity_by_id[place["id"]], at_time)
+        timer.lap("hours")
     score = score_walk(reached, settings)
     timer.lap("places")
     finish(response, "/api/places", timer)
@@ -242,7 +256,8 @@ def places(
     return {
         "start": {"node_id": start, "lat": start_lat, "lng": start_lng, "distance_m": round(gap_m, 1)},
         "minutes": minutes,
-        "amenities": reached,  # closest first
+        "at": at,
+        "amenities": reached,  # closest first; with "status" when a time was given
         "score": score,
     }
 
@@ -266,10 +281,11 @@ def reachable(
     lng: float = Lng,
     minutes: float = Minutes,
     weights: str | None = Weights,
+    at: str | None = At,
 ):
     """Everything in one response: places, score, and area. The site uses
     /api/places and /api/area instead, so the panel doesn't wait for the area."""
-    result = places(request, response, lat, lng, minutes, weights)
+    result = places(request, response, lat, lng, minutes, weights, at)
     result["area"] = area(request, response, lat, lng, minutes)["area"]
     return result
 

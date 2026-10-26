@@ -1,6 +1,8 @@
 import { CATEGORIES, verdict } from "../data/categories";
 import CategoryRow from "./CategoryRow";
 import NeedsProfile from "./NeedsProfile";
+import TimeOfDay from "./TimeOfDay";
+import { formatHour } from "../data/time";
 
 export default function ResultsPanel({
   status,
@@ -14,6 +16,9 @@ export default function ResultsPanel({
   onToggleExpanded,
   weights,
   onWeightsChange,
+  hour,
+  onHourChange,
+  timeLabel,
 }) {
   const loading = status === "loading";
   const categoryById = Object.fromEntries((result?.score.categories ?? []).map((c) => [c.category, c]));
@@ -61,12 +66,17 @@ export default function ResultsPanel({
             </p>
             <p className="score-summary__detail">
               The nearest of each is {result.score.proximity_minutes} minutes away on average.
+              {timeLabel && ` Counting places open at ${timeLabel}.`}
             </p>
           </div>
         </div>
       )}
 
-      <NeedsProfile weights={weights} onChange={onWeightsChange} />
+      {/* One group, so the two settings stack without the panel's gap between them. */}
+      <div className="settings">
+        <TimeOfDay hour={hour} onChange={onHourChange} />
+        <NeedsProfile weights={weights} onChange={onWeightsChange} />
+      </div>
 
       {result && (
         <div className="panel__results" aria-busy={loading}>
@@ -88,6 +98,7 @@ export default function ResultsPanel({
                 result={categoryById[category.id]}
                 selected={focus === category.id}
                 onSelect={onFocus}
+                hourLabel={timeLabel && formatHour(hour)}
               />
             ))}
           </ul>

@@ -1,13 +1,19 @@
 import { formatMinutes } from "./PlaceMarkers";
 
-export default function CategoryRow({ category, result, selected, onSelect }) {
+// hourLabel: "9 pm" when a time is chosen (card 10), otherwise null.
+export default function CategoryRow({ category, result, selected, onSelect, hourLabel }) {
   const nearest = result?.nearest ?? [];
+  const closed = result?.closed ?? [];
+  const closedCount = result?.closed_count ?? 0;
+  const openCount = result?.count ?? 0;
   const first = nearest[0];
   // Older responses have no "counted"; treat those as counted.
   const counted = result?.counted !== false;
   const detail = first
-    ? `${first.name ?? "Unnamed"}, ${formatMinutes(first.minutes)}`
-    : "None within 15 minutes";
+    ? `${placeName(first)}, ${formatMinutes(first.minutes)}`
+    : hourLabel && closedCount
+      ? `None open within 15 minutes`
+      : "None within 15 minutes";
 
   return (
     <li>
@@ -23,6 +29,11 @@ export default function CategoryRow({ category, result, selected, onSelect }) {
         <span>
           <span className="category-row__label">{category.label}</span>
           <span className="category-row__detail">{detail}</span>
+          {hourLabel && closedCount > 0 && (
+            <span className="category-row__detail">
+              {openCount} of {openCount + closedCount} open at {hourLabel}
+            </span>
+          )}
         </span>
         {counted ? (
           <span className="category-row__score">
@@ -40,15 +51,38 @@ export default function CategoryRow({ category, result, selected, onSelect }) {
         )}
       </button>
 
-      {selected && nearest.length > 1 && (
-        <ol className="nearest-list" aria-label={`Nearest ${category.label.toLowerCase()}`}>
-          {nearest.map((p, i) => (
-            <li key={i}>
-              {p.name ?? "Unnamed"}, {formatMinutes(p.minutes)}
-            </li>
-          ))}
-        </ol>
+      {selected && (nearest.length > 1 || closed.length > 0) && (
+        <div className="nearest">
+          {nearest.length > 0 && (
+            <ol className="nearest-list" aria-label={`Nearest ${category.label.toLowerCase()}`}>
+              {nearest.map((p, i) => (
+                <li key={i}>
+                  {placeName(p)}, {formatMinutes(p.minutes)}
+                </li>
+              ))}
+            </ol>
+          )}
+          {closed.length > 0 && (
+            <>
+              <p className="nearest-list__heading">Closed at {hourLabel}</p>
+              <ul className="nearest-list nearest-list--closed">
+                {closed.map((p, i) => (
+                  <li key={i}>
+                    {p.name ?? "Unnamed"}, {formatMinutes(p.minutes)}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
       )}
     </li>
   );
+}
+
+// "Duane Reade (hours unknown)" when a time is chosen and OpenStreetMap
+// has no hours for the place.
+function placeName(place) {
+  const name = place.name ?? "Unnamed";
+  return place.status === "unknown" ? `${name} (hours unknown)` : name;
 }

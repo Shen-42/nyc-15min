@@ -4,6 +4,7 @@ import ManhattanMap from "./components/ManhattanMap";
 import ResultsPanel from "./components/ResultsPanel";
 import { isInManhattan } from "./data/manhattan";
 import { loadWeights, saveWeights, weightsToQuery } from "./data/profiles";
+import { atQuery, formatHour, nycNow } from "./data/time";
 
 const MINUTES = 15;
 // Wait this long after the last change to the needs form before re-scoring,
@@ -27,12 +28,16 @@ export default function App() {
   const [waking, setWaking] = useState(false);
   // How much each kind of place matters (card 9). Remembered by the browser.
   const [weights, setWeights] = useState(loadWeights);
+  // The hour to check opening hours at (card 10), New York time, or null
+  // for any time. Not remembered: "9 pm" means today's 9 pm.
+  const [hour, setHour] = useState(null);
   // Counts requests so a slow old response can't replace a newer one.
   const latestRequest = useRef(0);
   // The same for re-scores after the needs form changes.
   const latestRescore = useRef(0);
   // Read inside async code, where the state values could be stale.
   const weightsRef = useRef(weights);
+  const hourRef = useRef(hour);
   const pointRef = useRef(null);
 
   // Wake the server as soon as the page opens, so it's likely ready by the
@@ -51,16 +56,19 @@ export default function App() {
   // When the needs form changes: remember it, and re-score the current spot.
   // Only the score and places are asked for again; the shaded area doesn't
   // depend on weights, so it stays as it is.
+  // The same when the hour changes: opening hours don't change the area either.
   useEffect(() => {
     weightsRef.current = weights;
+    hourRef.current = hour;
     saveWeights(weights);
     if (!pointRef.current) return;
     const timer = setTimeout(rescore, RESCORE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [weights]);
+  }, [weights, hour]);
 
   function placesQuery(point) {
-    return `lat=${point[0]}&lng=${point[1]}&minutes=${MINUTES}&weights=${weightsToQuery(weightsRef.current)}`;
+    const at = hourRef.current === null ? "" : `&at=${atQuery(hourRef.current)}`;
+    return `lat=${point[0]}&lng=${point[1]}&minutes=${MINUTES}&weights=${weightsToQuery(weightsRef.current)}${at}`;
   }
 
   async function rescore() {
@@ -184,13 +192,17 @@ export default function App() {
         onToggleExpanded={() => setExpanded((open) => !open)}
         weights={weights}
         onWeightsChange={setWeights}
+        hour={hour}
+        onHourChange={setHour}
+        timeLabel={hour === null ? null : `${formatHour(hour)} on ${nycNow().weekday}`}
       />
       <div className="map-wrap" data-focus={focus ?? undefined}>
         <ManhattanMap
           selectedPoint={selectedPoint}
           area={result?.area}
           areaKey={result?.id}
-          places={result?.places ?? []}
+          // Closed places leave the map; the panel still lists them.
+          places={(result?.places ?? []).filter((p) => p.status !== "closed")}
           onMapClick={handleMapClick}
         />
       </div>

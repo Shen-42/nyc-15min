@@ -142,6 +142,11 @@ def main():
                 "lng": round(spot.x, 6),
                 "nodes": nodes,  # graph nodes that count as reaching this place
             })
+            # OpenStreetMap opening hours, when listed (card 10). Left out
+            # when missing, to keep the file small.
+            hours = text(row.get("opening_hours"))
+            if hours:
+                amenities[-1]["hours"] = hours
             kept += 1
         print(f"Kept {kept} {category} places in Manhattan")
 
@@ -149,8 +154,9 @@ def main():
     counts = Counter(a["category"] for a in amenities)
     size_mb = OUTPUT_FILE.stat().st_size / 1_000_000
     print(f"\nSaved {len(amenities)} places to {OUTPUT_FILE} ({size_mb:.1f} MB)")
+    with_hours = Counter(a["category"] for a in amenities if "hours" in a)
     for category in CATEGORIES:
-        print(f"  {category:9} {counts[category]}")
+        print(f"  {category:9} {counts[category]:5}  ({with_hours[category]} with opening hours)")
 
 
 if __name__ == "__main__":

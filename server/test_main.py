@@ -80,3 +80,29 @@ def test_places_takes_a_needs_profile():
             assert res.status_code == 422
             assert isinstance(res.json()["detail"], str)
     rate_limiter.counter.clear()
+
+
+def test_places_checks_opening_hours_at_a_time():
+    from pathlib import Path
+
+    import pytest
+
+    if not (Path(__file__).parent / "data" / "walk_graph.json").exists():
+        pytest.skip("run scripts/build_graph.py first")
+    from main import rate_limiter
+
+    rate_limiter.counter.clear()
+    times_square = {"lat": 40.758, "lng": -73.9855}
+    with TestClient(app) as c:
+        anytime = c.get("/api/places", params=times_square).json()
+        assert all("status" not in p for p in anytime["amenities"])
+
+        late = c.get("/api/places", params={**times_square, "at": "2026-10-26T03:00"})
+        assert late.status_code == 200
+        statuses = {p["status"] for p in late.json()["amenities"]}
+        assert statuses <= {"open", "closed", "unknown"}
+        assert late.json()["score"]["score"] <= anytime["score"]["score"]
+
+        bad = c.get("/api/places", params={**times_square, "at": "9pm"})
+        assert bad.status_code == 422 and isinstance(bad.json()["detail"], str)
+    rate_limiter.counter.clear()

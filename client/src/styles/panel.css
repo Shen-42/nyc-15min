@@ -149,11 +149,72 @@
   background: var(--cat);
 }
 
-.nearest-list {
+.nearest {
   padding: 0 var(--space-2) var(--space-3) calc(var(--space-2) + 28px + var(--space-3));
   color: var(--color-muted);
   font-size: var(--text-sm);
 }
+
+.nearest-list {
+  padding-left: 1.25em;
+}
+
+.nearest-list__heading {
+  margin-top: var(--space-2);
+  font-weight: 700;
+}
+
+/* ---- Time of day (card 10) ---- */
+
+/* It uses the same open/close style as "Your needs". Two in a row share one line. */
+.needs + .needs {
+  border-top: 0;
+}
+
+.time__buttons {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Same look as the needs presets: one style for every toggle button. */
+.time__button {
+  min-height: var(--tap-target);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.time__button[aria-pressed="true"] {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-surface);
+}
+
+/* Tall enough to grab with a thumb. */
+.time__slider {
+  width: 100%;
+  min-height: var(--tap-target);
+  margin: 0;
+  accent-color: var(--color-ink);
+  cursor: pointer;
+}
+
+/* With Any time picked, the slider is grayed but still works: moving it picks an hour. */
+.time__slider--idle {
+  accent-color: var(--color-muted);
+}
+
+.time__ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: calc(-1 * var(--space-2));
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+
 
 /* A category the person marked "Not needed": still listed, but grayed out.
    Gray, not opacity, so text and glyph keep 6.2:1 contrast. */

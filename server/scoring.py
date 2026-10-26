@@ -93,7 +93,8 @@ def score_walk(reached, settings=CATEGORY_SETTINGS):
     """The overall score for one point.
 
     reached: places the walk reaches, each with "category", "name", and
-    "minutes" (the list amenities.reachable_amenities returns).
+    "minutes" (the list amenities.reachable_amenities returns), and
+    "status" ("open", "closed", "unknown") when a time was chosen.
     settings: weight and depth per category. A category with weight 0 is
     still described in the breakdown but left out of the score and of
     proximity time.
@@ -108,7 +109,10 @@ def score_walk(reached, settings=CATEGORY_SETTINGS):
     total_weight = 0.0
     nearest_times = []
     for category, s in settings.items():
-        places = by_category[category]
+        # With a time chosen (card 10), closed places don't count. Places
+        # with unknown hours do, since most of them are open in the day.
+        places = [p for p in by_category[category] if p.get("status") != "closed"]
+        closed = [p for p in by_category[category] if p.get("status") == "closed"]
         sub = category_score([p["minutes"] for p in places], s["depth"])
         counted = s["weight"] > 0
         if counted:
@@ -121,10 +125,12 @@ def score_walk(reached, settings=CATEGORY_SETTINGS):
             "weight": s["weight"],
             "counted": counted,
             "count": len(places),
+            "closed_count": len(closed),
             "nearest": [
-                {"name": p["name"], "minutes": p["minutes"]}
+                {"name": p["name"], "minutes": p["minutes"], "status": p.get("status")}
                 for p in places[: len(s["depth"])]
             ],
+            "closed": [{"name": p["name"], "minutes": p["minutes"]} for p in closed[:3]],
         })
 
     return {

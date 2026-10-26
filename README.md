@@ -42,6 +42,8 @@ Click any point in Manhattan to see everywhere you can walk in 15 minutes, which
 
    The presets are my own judgment calls, not survey results.
 
+8. **Time of day.** By default every place counts, whatever its hours. Move the "Open at" slider, or press Now, and the score only counts places open at that hour today, New York time. Hours come from OpenStreetMap's `opening_hours` tag, read on the server with [opening-hours-py](https://pypi.org/project/opening-hours-py/). Closed places leave the map, and the panel lists them as "Closed at 9 pm" with a count such as "3 of 5 open". Places with no listed hours still count and get a "?" badge. The subway runs all night and schools matter for being nearby, so those two are always counted.
+
 ## Stack
 
 | Part | Tools |
@@ -124,6 +126,8 @@ All routes take `lat`, `lng`, and optionally `minutes` (default 15, at most 30).
 
 `/api/places` and `/api/reachable` also take `weights`, for example `weights=grocery:3,park:3,school:0`. Each weight is a whole number from 0 to 3, and categories left out keep their defaults. An unknown category, a weight out of range, or all weights at 0 returns 422 with a message saying what to fix.
 
+`/api/places` and `/api/reachable` also take `at`, a New York time such as `at=2026-10-26T21:00`. With it, each place gets a `status` (`open`, `closed`, or `unknown`) and closed places are left out of the score.
+
 The site requests `/api/places` and `/api/area` at the same time, so the panel fills in while the slower area is still being built. Recent results are cached by start node. Each visitor gets 30 searches a minute per route; over that, the API returns 429 with a `Retry-After` header and the panel says how many seconds to wait. On Render the counts are kept in a free Redis-compatible Key Value instance, so they survive the API sleeping; locally they are kept in memory (`server/rate_limit.py`).
 
 Every search prints its timing to the server log, for example `/api/places nearest 1 ms, search 3 ms, places 1 ms (total 5 ms)`, and sends it in a `Server-Timing` header, visible in Chrome's DevTools under Network > Timing.
@@ -193,6 +197,7 @@ Not yet supported: choosing a point by keyboard. An address search would fix tha
 ## Data and credits
 
 - Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
+- Opening hours parsed with [opening-hours-py](https://pypi.org/project/opening-hours-py/) by Rémi Dupré.
 - Map tiles © [Stadia Maps](https://stadiamaps.com/attribution/) and © [OpenMapTiles](https://openmaptiles.org/).
 - Manhattan boundary from Code for Germany's [Click That 'Hood](https://github.com/codeforgermany/click_that_hood).
 - Scoring sources: Walk Score's methodology; Yang et al. (2023), "Walkability Measurement of 15-Minute Community Life Circle in Shanghai," *Land* 12(1); Bruno et al. (2024), "A universal framework for inclusive 15-minute cities," *Nature Cities*.

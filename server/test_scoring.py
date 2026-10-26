@@ -106,6 +106,29 @@ def test_missing_lists_only_counted_categories():
     assert score_walk(reached, settings_with_weights({"school": 0}))["missing"] == []
 
 
+def test_closed_places_do_not_count():
+    reached = everything_within(2)
+    for p in reached:
+        p["status"] = "open"
+    open_score = score_walk(reached)["score"]
+    for p in reached:
+        if p["category"] == "grocery":
+            p["status"] = "closed"
+    result = score_walk(reached)
+    grocery = next(c for c in result["categories"] if c["category"] == "grocery")
+    assert result["score"] < open_score
+    assert grocery["score"] == 0 and grocery["count"] == 0 and grocery["closed_count"] == 5
+    assert len(grocery["closed"]) == 3
+    assert "grocery" in result["missing"]
+
+
+def test_unknown_hours_count_as_open():
+    reached = everything_within(2)
+    for p in reached:
+        p["status"] = "unknown"
+    assert score_walk(reached)["score"] == 100
+
+
 # On the real data. Skipped until the graph and places have been built.
 DATA = Path(__file__).parent / "data"
 needs_data = pytest.mark.skipif(
