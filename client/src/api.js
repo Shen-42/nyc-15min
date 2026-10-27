@@ -4,8 +4,8 @@
 // for example https://nyc-15min-api.onrender.com
 const API_URL = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
-export function apiFetch(path) {
-  return fetch(`${API_URL}${path}`);
+export function apiFetch(path, options) {
+  return fetch(`${API_URL}${path}`, options);
 }
 
 // Render's free plan puts the API to sleep after 15 minutes without visits,

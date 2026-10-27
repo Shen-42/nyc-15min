@@ -27,6 +27,7 @@ FLOORS = {
     "graph segments": 45_000,
     "subway stations": 140,  # Manhattan has about 150
     "lakes and ponds": 8,
+    "grid cells": 5_000,  # about 5,450 cells of 100 m on land
 }
 
 LABELS = {
@@ -51,6 +52,9 @@ def current_counts():
     }
     for category, label in LABELS.items():
         counts[label] = by_category[category]
+    grid_file = DATA / "grid.json"
+    if grid_file.exists():
+        counts["grid cells"] = json.loads(grid_file.read_text())["meta"]["cell_count"]
     ramps_file = DATA / "ramps.json"
     if ramps_file.exists():
         meta = json.loads(ramps_file.read_text())["meta"]

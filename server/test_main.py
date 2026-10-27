@@ -132,3 +132,28 @@ def test_wheelchair_mode_reaches_less_and_rejects_unknown_modes():
         bad = c.get("/api/places", params={**times_square, "mode": "skateboard"})
         assert bad.status_code == 422 and isinstance(bad.json()["detail"], str)
     rate_limiter.counter.clear()
+
+
+def test_grid_and_rank():
+    from pathlib import Path
+
+    import pytest
+
+    data = Path(__file__).parent / "data"
+    if not (data / "walk_graph.json").exists() or not (data / "grid.json").exists():
+        pytest.skip("run scripts/build_graph.py and scripts/build_grid.py first")
+    from main import rate_limiter
+
+    rate_limiter.counter.clear()
+    times_square = {"lat": 40.758, "lng": -73.9855}
+    with TestClient(app) as c:
+        res = c.get("/api/grid")
+        assert res.status_code == 200
+        body = res.json()
+        assert len(body["cells"]) > 4000 and set(body["gaps"]) == set(body["meta"]["categories"])
+
+        walk = c.get("/api/places", params=times_square).json()
+        assert 0 <= walk["score"]["rank"] <= 100
+        chair = c.get("/api/places", params={**times_square, "mode": "wheelchair"}).json()
+        assert chair["score"]["rank"] is None
+    rate_limiter.counter.clear()

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   AttributionControl,
   CircleMarker,
@@ -6,6 +7,7 @@ import {
   Marker,
   Polygon,
   TileLayer,
+  Tooltip,
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
@@ -17,6 +19,10 @@ import {
   COMING_SOON_LABELS,
 } from "../data/manhattan";
 import BarrierMarkers from "./BarrierMarkers";
+import GridLayer from "./GridLayer";
+import { CATEGORY_BY_ID } from "../data/categories";
+import { cellScore, heatColor, hexToRgb, inPark, isGap } from "../data/grid";
+import { smoothstep } from "../data/gridImage";
 import PlaceMarkers from "./PlaceMarkers";
 
 // Text labels for the other boroughs. divIcon draws HTML instead of an image.
@@ -40,6 +46,14 @@ const TILE_URL =
   "https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png" +
   (STADIA_KEY ? `?api_key=${STADIA_KEY}` : "");
 
+// The gap finder's best spot: a star, a shape no other marker uses.
+const STAR_ICON = L.divIcon({
+  className: "best-spot",
+  html: '<span class="best-spot__shape" aria-hidden="true">★</span>',
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+});
+
 // react-leaflet hook: runs our function whenever the map is clicked.
 function ClickHandler({ onMapClick }) {
   useMapEvents({
@@ -51,7 +65,46 @@ function ClickHandler({ onMapClick }) {
 }
 
 // Colors for the shapes below come from styles/map.css, by class name.
-export default function ManhattanMap({ selectedPoint, area, areaKey, places, barriers = [], onMapClick }) {
+export default function ManhattanMap({
+  selectedPoint,
+  area,
+  areaKey,
+  places,
+  barriers = [],
+  view = "walk",
+  grid = null,
+  weights,
+  gapCategory,
+  onMapClick,
+}) {
+  // What the score map or gap finder draws (card 12): a value for each grid
+  // cell, and a color for each value. data/gridImage.js smooths the values
+  // into a gradient. Park cells have no value, and parks and lakes are cut
+  // out of the image, since nobody lives there.
+  const layer = useMemo(() => {
+    if (!grid || view === "walk") return null;
+    const categories = grid.meta.categories;
+    if (view === "heat") {
+      return {
+        valueFor: (cell) => (inPark(cell) ? null : cellScore(cell, categories, weights)),
+        colorFor: (score) => [...heatColor(score), 1],
+        sigma: 1.2,
+      };
+    }
+    // Gaps take their category's color, the same as its markers. The value
+    // is the share of nearby cells that are gaps, so lone squares stay faint
+    // and clusters show solid.
+    const rgb = hexToRgb(getComputedStyle(document.documentElement).getPropertyValue(`--cat-${gapCategory}`).trim());
+    return {
+      valueFor: (cell) => (inPark(cell) ? null : isGap(cell, categories, gapCategory) ? 1 : 0),
+      colorFor: (share) => (share < 0.1 ? null : [...rgb, 0.9 * smoothstep(0.1, 0.45, share)]),
+      sigma: 0.9,
+    };
+  }, [grid, view, weights, gapCategory]);
+
+  const walking = view === "walk";
+  const best = view === "gaps" && grid ? grid.gaps[gapCategory].best : null;
+
   return (
     <MapContainer
       className="map"
@@ -90,12 +143,23 @@ export default function ManhattanMap({ selectedPoint, area, areaKey, places, bar
       {/* GeoJSON doesn't redraw when its data changes, so a new key forces
           a fresh layer. The key changes when a new result arrives, not when
           the dot moves, which happens before the result is back. */}
-      {area && <GeoJSON key={areaKey} data={area} className="walk-area" interactive={false} />}
+      {layer && <GridLayer cells={grid.cells} cellM={grid.meta.cell_m} blank={grid.blank} {...layer} />}
 
-      <BarrierMarkers barriers={barriers} />
-      <PlaceMarkers places={places} />
+      {best && (
+        <Marker position={[best.lat, best.lng]} icon={STAR_ICON} keyboard={false}>
+          <Tooltip direction="top" offset={[0, -16]} className="place-tooltip">
+            Best spot for a new {CATEGORY_BY_ID[gapCategory].one}
+            {best.near ? `, near ${best.near}` : ""}
+          </Tooltip>
+        </Marker>
+      )}
 
-      {selectedPoint && (
+      {/* Your walk's layers. Hidden in the score map and gap finder, which cover all of Manhattan. */}
+      {walking && area && <GeoJSON key={areaKey} data={area} className="walk-area" interactive={false} />}
+      {walking && <BarrierMarkers barriers={barriers} />}
+      {walking && <PlaceMarkers places={places} />}
+
+      {walking && selectedPoint && (
         <CircleMarker center={selectedPoint} radius={8} className="start-point" interactive={false} />
       )}
 

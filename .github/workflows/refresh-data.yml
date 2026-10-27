@@ -56,6 +56,11 @@ jobs:
       - name: Download curb ramps
         run: python scripts/build_ramps.py
 
+      # The background job for card 12: score every 100 m of Manhattan with
+      # the new data and find the gaps. Under a minute; no downloads.
+      - name: Score the Manhattan grid
+        run: python scripts/build_grid.py
+
       - name: Check the new data
         run: python scripts/check_data.py --compare "$RUNNER_TEMP/before.json"
 

@@ -72,6 +72,18 @@ def curb_nodes(G):
     return sorted(int(n) for n in intersections | crossings)
 
 
+def intersection_names(G):
+    """{node id: [street names]} for intersections of two or more named
+    streets, so a spot can be described as "W 125th St & Lenox Ave" (card 12)."""
+    names = defaultdict(set)
+    for u, v, d in G.edges(data=True):
+        if as_set(d.get("highway")) & STREET_TYPES:
+            for name in as_set(d.get("name")):
+                names[u].add(name)
+                names[v].add(name)
+    return {str(int(n)): sorted(found) for n, found in names.items() if len(found) >= 2}
+
+
 def main():
     overpass.configure()
     # Keep the footway tag, which OSMnx drops by default, to find crosswalks.
@@ -118,6 +130,8 @@ def main():
 
     curbs = curb_nodes(G)
     print(f"Found {len(curbs):,} street corners and crosswalk ends")
+    streets = intersection_names(G)
+    print(f"Named {len(streets):,} intersections")
 
     edges = []
     for length, u, v, between in best.values():
@@ -141,6 +155,7 @@ def main():
                 "nodes": nodes,  # [id, lat, lng]
                 "edges": edges,  # [node_a, node_b, length_m, optional points between]
                 "curb_nodes": curbs,  # nodes where you step off a curb (card 11)
+                "streets": streets,  # {node id: street names} at intersections (card 12)
             },
             separators=(",", ":"),
         )

@@ -18,6 +18,7 @@ from shapely.ops import unary_union
 
 from amenities import load_amenities, reachable_amenities
 from graph import WalkGraph
+from grid import Grid
 from hours import parse_at, status_at
 from modes import NO_RAMP_PENALTY_MIN, SPEEDS, load_no_ramp_nodes, parse_mode
 from rate_limit import RateLimited, RateLimiter, make_counter
@@ -29,6 +30,7 @@ LAND_FILE = Path(__file__).parent / "data" / "manhattan-boundary.json"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
 AMENITIES_FILE = Path(__file__).parent / "data" / "amenities.json"
 RAMPS_FILE = Path(__file__).parent / "data" / "ramps.json"
+GRID_FILE = Path(__file__).parent / "data" / "grid.json"
 
 # Clicks farther than this from any street or path (the middle of a lake or a
 # rail yard) are turned away instead of starting from a far-off path.
@@ -48,11 +50,13 @@ amenity_by_id = {}
 # Street corners with no curb ramp, and the extra minutes each costs in a
 # wheelchair (card 11). Empty if the ramps file hasn't been built.
 ramp_penalty = {}
+# Every 100 m of Manhattan, scored ahead of time (card 12). None if not built.
+grid = None
 
 
 @asynccontextmanager
 async def lifespan(app):
-    global walk_graph, land, water, amenities, amenity_by_id, ramp_penalty
+    global walk_graph, land, water, amenities, amenity_by_id, ramp_penalty, grid
     if AMENITIES_FILE.exists():
         amenities = load_amenities(AMENITIES_FILE)
         amenity_by_id = {a["id"]: a for a in amenities}
@@ -74,6 +78,11 @@ async def lifespan(app):
         print(f"Loaded {len(ramp_penalty):,} corners with no curb ramp")
     else:
         print(f"No ramps file at {RAMPS_FILE}. Wheelchair mode will only be slower. Run: python scripts/build_ramps.py")
+    if GRID_FILE.exists():
+        grid = Grid.from_file(GRID_FILE)
+        print(f"Loaded the Manhattan grid: {len(grid.data['cells']):,} cells, {len(grid):,} outside parks")
+    else:
+        print(f"No grid file at {GRID_FILE}. Run: python scripts/build_grid.py")
     if GRAPH_FILE.exists():
         walk_graph = WalkGraph.from_file(GRAPH_FILE)
         print(f"Loaded walking graph: {len(walk_graph):,} nodes, {walk_graph.edge_count:,} edges")
@@ -271,6 +280,12 @@ def places(
             place["status"] = status_at(amenity_by_id[place["id"]], at_time)
         timer.lap("hours")
     score = score_walk(reached, settings)
+    # How this spot compares with the rest of Manhattan (card 12). The grid
+    # was scored walking at any time, so the rank is only given for those.
+    if grid is not None and mode == "walk" and at_time is None and minutes == 15:
+        score["rank"] = grid.rank(score["score"], settings)
+    else:
+        score["rank"] = None
     timer.lap("places")
     finish(response, "/api/places", timer)
     start_lat, start_lng = walk_graph.coords[start]
@@ -283,6 +298,19 @@ def places(
         "barriers": barriers_reached(times, minutes - budget) if mode == "wheelchair" else [],
         "score": score,
     }
+
+
+@app.get("/api/grid")
+def grid_cells(request: Request, response: Response):
+    """Every 100 m of Manhattan with its score in each category, plus the
+    gaps and the best spot to fill each one (card 12). The site draws the
+    heat map and gap finder from this. Browsers aren't asked to keep it, so
+    a rebuilt grid shows up as soon as the server restarts."""
+    check_rate_limit(f"{request.client.host if request.client else 'unknown'}:grid")
+    if grid is None:
+        raise HTTPException(status_code=503, detail="The Manhattan grid isn't built yet. Run: python scripts/build_grid.py")
+    response.headers["Cache-Control"] = "no-store"
+    return grid.data
 
 
 def barriers_reached(times, offset):

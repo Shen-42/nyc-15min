@@ -117,3 +117,17 @@
 .map-wrap[data-focus] .barrier-marker {
   opacity: 0.2;
 }
+
+/* The gap finder's best spot (card 12): a star in a white circle. */
+.best-spot__shape {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--color-ink);
+  font-size: 20px;
+  line-height: 1;
+  box-shadow: 0 0 0 2px var(--color-ink), 0 1px 4px rgb(0 0 0 / 0.4);
+}

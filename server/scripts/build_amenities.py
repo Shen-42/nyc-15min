@@ -30,6 +30,11 @@ import overpass  # noqa: E402  scripts/overpass.py: server choice and retries
 GRAPH_FILE = SERVER_DIR / "data" / "walk_graph.json"
 LAND_FILE = SERVER_DIR / "data" / "manhattan-boundary.json"
 OUTPUT_FILE = SERVER_DIR / "data" / "amenities.json"
+# Park outlines (card 12). Nobody lives in a park, so the Manhattan grid
+# leaves them out of gaps and ranks, and the heat map leaves them blank.
+PARKS_FILE = SERVER_DIR / "data" / "parks.json"
+# Outlines are simplified to about this many meters, to keep the file small.
+PARK_SIMPLIFY_M = 5
 
 
 def text(value):
@@ -101,6 +106,7 @@ def main():
         return (node_ids[idx[0]], float(dist[0])) if len(idx) else (None, None)
 
     amenities = []
+    park_outlines = []
     for category, spec in CATEGORIES.items():
         print(f"\n--- {category} ---")
         if category != next(iter(CATEGORIES)):
@@ -125,6 +131,16 @@ def main():
                 area_m = to_meters(geom)
                 if category == "park" and area_m.area < MIN_PARK_M2:
                     continue
+                if category == "park":
+                    simple = geom.simplify(PARK_SIMPLIFY_M / M_PER_DEG_LAT)
+                    parts = list(simple.geoms) if simple.geom_type == "MultiPolygon" else [simple]
+                    parts = [part for part in parts if part.geom_type == "Polygon" and not part.is_empty]
+                    park_outlines.append({
+                        "name": text(row.get("name")),
+                        "area_m2": round(area_m.area),
+                        # Outer rings as [lat, lng]. Holes (a building inside a park) are ignored.
+                        "rings": [[[round(y, 6), round(x, 6)] for x, y in part.exterior.coords] for part in parts],
+                    })
                 inside = tree.query(area_m.buffer(EDGE_M), predicate="contains")
                 nodes = [node_ids[i] for i in inside]
                 if not nodes:
@@ -151,6 +167,8 @@ def main():
         print(f"Kept {kept} {category} places in Manhattan")
 
     OUTPUT_FILE.write_text(json.dumps(amenities, separators=(",", ":")))
+    PARKS_FILE.write_text(json.dumps(park_outlines, separators=(",", ":")))
+    print(f"Saved {len(park_outlines)} park outlines to {PARKS_FILE} ({PARKS_FILE.stat().st_size / 1000:.0f} KB)")
     counts = Counter(a["category"] for a in amenities)
     size_mb = OUTPUT_FILE.stat().st_size / 1_000_000
     print(f"\nSaved {len(amenities)} places to {OUTPUT_FILE} ({size_mb:.1f} MB)")

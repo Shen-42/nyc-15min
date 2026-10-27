@@ -22,8 +22,9 @@ export default function App() {
   const [message, setMessage] = useState(null);
   // The category whose places are highlighted on the map, or null.
   const [focus, setFocus] = useState(null);
-  // On phones, whether the category list is open in the bottom sheet.
-  const [expanded, setExpanded] = useState(false);
+  // On phones, where the bottom sheet sits: "hidden" (just its handle, so
+  // the whole map shows), "peek" (title and score), or "open" (everything).
+  const [sheet, setSheet] = useState("peek");
   // True while a request has taken long enough that the server is probably waking up.
   const [waking, setWaking] = useState(false);
   // How much each kind of place matters (card 9). Remembered by the browser.
@@ -33,6 +34,12 @@ export default function App() {
   const [hour, setHour] = useState(null);
   // "walk" or "wheelchair" (card 11). Remembered by the browser.
   const [mode, setMode] = useState(loadMode);
+  // What the map shows (card 12): "walk" (your walk), "heat" (score map), or "gaps".
+  const [view, setView] = useState("walk");
+  const [gapCategory, setGapCategory] = useState("grocery");
+  // The Manhattan grid, loaded the first time the score map or gap finder opens.
+  const [grid, setGrid] = useState(null);
+  const [gridError, setGridError] = useState(null);
   // Counts requests so a slow old response can't replace a newer one.
   const latestRequest = useRef(0);
   // The same for re-scores after the needs form changes.
@@ -68,6 +75,18 @@ export default function App() {
     const timer = setTimeout(rescore, RESCORE_DELAY_MS);
     return () => clearTimeout(timer);
   }, [weights, hour]);
+
+  // Load the grid once, when it's first needed. It's about 100 KB compressed.
+  useEffect(() => {
+    if (view === "walk" || grid) return;
+    setGridError(null);
+    // "no-store": always ask the server, so a rebuilt grid is never hidden
+    // behind an old copy in the browser's cache.
+    apiFetch("/api/grid", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then(setGrid)
+      .catch(() => setGridError("Couldn't load the map of Manhattan. Try again in a minute."));
+  }, [view, grid]);
 
   // A new way of getting around changes the shaded area too, so search again in full.
   useEffect(() => {
@@ -190,6 +209,8 @@ export default function App() {
 
   function handleMapClick(point) {
     setFocus(null);
+    setView("walk"); // a click asks about one spot, so go back to your walk
+    setSheet((s) => (s === "hidden" ? "peek" : s)); // and its score should show
     if (isInManhattan(point)) {
       setSelectedPoint(point);
       findWalkingArea(point);
@@ -213,8 +234,8 @@ export default function App() {
         waking={waking}
         focus={focus}
         onFocus={setFocus}
-        expanded={expanded}
-        onToggleExpanded={() => setExpanded((open) => !open)}
+        sheet={sheet}
+        onSheetChange={setSheet}
         weights={weights}
         onWeightsChange={setWeights}
         hour={hour}
@@ -222,6 +243,12 @@ export default function App() {
         timeLabel={hour === null ? null : `${formatHour(hour)} on ${nycNow().weekday}`}
         mode={mode}
         onModeChange={setMode}
+        view={view}
+        onViewChange={setView}
+        grid={grid}
+        gridError={gridError}
+        gapCategory={gapCategory}
+        onGapCategory={setGapCategory}
       />
       <div className="map-wrap" data-focus={focus ?? undefined}>
         <ManhattanMap
@@ -231,6 +258,10 @@ export default function App() {
           // Closed places leave the map; the panel still lists them.
           places={(result?.places ?? []).filter((p) => p.status !== "closed")}
           barriers={result?.barriers ?? []}
+          view={view}
+          grid={grid}
+          weights={weights}
+          gapCategory={gapCategory}
           onMapClick={handleMapClick}
         />
       </div>

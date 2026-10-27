@@ -2,13 +2,14 @@
 // weight first, matching CATEGORY_SETTINGS in server/scoring.py).
 // Each has a short glyph so the map and panel never rely on color alone
 // (WCAG 1.4.1). Colors live in styles/tokens.css as --cat-<id>.
+// "one" is the singular, for sentences like "no grocery store within 15 minutes".
 export const CATEGORIES = [
-  { id: "grocery", label: "Groceries", glyph: "G" },
-  { id: "subway", label: "Subway stations", glyph: "T" },
-  { id: "pharmacy", label: "Pharmacies", glyph: "Rx" },
-  { id: "clinic", label: "Doctors and clinics", glyph: "+" },
-  { id: "park", label: "Parks", glyph: "P" },
-  { id: "school", label: "Schools", glyph: "S" },
+  { id: "grocery", label: "Groceries", one: "grocery store", glyph: "G" },
+  { id: "subway", label: "Subway stations", one: "subway station", glyph: "T" },
+  { id: "pharmacy", label: "Pharmacies", one: "pharmacy", glyph: "Rx" },
+  { id: "clinic", label: "Doctors and clinics", one: "doctor or clinic", glyph: "+" },
+  { id: "park", label: "Parks", one: "park", glyph: "P" },
+  { id: "school", label: "Schools", one: "school", glyph: "S" },
 ];
 
 export const CATEGORY_BY_ID = Object.fromEntries(CATEGORIES.map((c) => [c.id, c]));

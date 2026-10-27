@@ -46,6 +46,11 @@ Click any point in Manhattan to see everywhere you can walk in 15 minutes, which
 
 9. **Wheelchair.** "Your needs" starts with how you get around: Walking or Wheelchair. In a wheelchair the search moves at 48 m a minute instead of 80, about 0.8 m/s, the everyday average in Cooper et al. (2011) and Tolerico et al. (2007). Each street corner or crosswalk end with no curb ramp within 30 m adds 3 minutes, roughly the detour to the next corner that has one. That penalty is my estimate, not a measured value. Ramps come from NYC DOT's [Pedestrian Ramp Locations](https://data.cityofnewyork.us/d/ufzp-rrqu). Corners without a ramp show on the map as dark diamonds with "!", and the line under the score says how many are in reach. The penalty applies whenever the search passes such a corner, even where it walks along the street rather than crossing it.
 
+10. **All of Manhattan.** A script (`server/scripts/build_grid.py`) lays a 100 m grid over the island, about 5,450 squares on land, and runs the same 15-minute walk from each one, saving every category's score. It takes under a minute and runs after each monthly data refresh. Nobody lives in a park, so squares that lie mostly inside a park outline from OpenStreetMap (saved by `build_amenities.py` as `server/data/parks.json`) are left out of the rank, the gaps, and the search for a best spot. On the map, every park outline and lake is cut out of the image, and color also fades wherever most nearby squares are park (such as the Henry Hudson Parkway's strip through Inwood Hill Park), so neither the score map nor the gap finder touches a park. With the grid:
+    - Each clicked spot gets a rank under its score, such as "Better than 70% of Manhattan", using the same weights as the score. The grid was scored walking at any time, so the rank only shows for those settings.
+    - **Score map** (under "Map view"): a smooth heat map of the score with your weights, colored with the viridis palette, which stays in order for color-blind viewers. The squares are data points, not drawn shapes: the browser (`client/src/data/gridImage.js`) sets each pixel to a weighted average of the nearby squares' scores, with weights falling off along a Gaussian curve (sigma 120 m), and divides by the total weight so the shore and small parks don't fade. The image is cut to Manhattan's shoreline, with parks and lakes cut out. It's rebuilt in about 0.2 seconds when your weights change.
+    - **Gap finder**: for one category, the areas with nothing of it within 15 minutes, drawn the same smooth way in the category's color (darker where more nearby squares are gaps), and the one square where a new place would cover the most gap squares, marked with a star. The spot is named by its nearest corner, using the street names in the curb ramp data, or else by the nearest named place. Manhattan has few true gaps. In the October 2026 data, of 4,720 squares outside parks: 15 have no grocery store in reach (11 of them on Roosevelt Island), 83 no subway station (the largest group, 27 squares, on the Lower East Side), 61 no pharmacy (38 in Inwood), and none lack a park.
+
 ## Stack
 
 | Part | Tools |
@@ -55,7 +60,7 @@ Click any point in Manhattan to see everywhere you can walk in 15 minutes, which
 | Data | OpenStreetMap via OSMnx and the Overpass API; NYC Open Data for curb ramps |
 | Map tiles | Stadia Maps, OSM Bright style |
 | Hosting | Render: a static site, a web service for the API, and Key Value (Redis) for rate limits |
-| Automation | GitHub Actions: monthly data refresh |
+| Automation | GitHub Actions: monthly data refresh, then scoring the Manhattan grid |
 | Tests | pytest |
 
 ## Project layout
@@ -65,8 +70,10 @@ client/                    React site
   src/App.jsx              state, requests, and layout
   src/api.js               API address and request helper
   src/components/          map, results panel, category rows, place and corner markers,
-                           the time and "Your needs" sections
-  src/data/                categories, needs presets, New York time, Manhattan boundary
+                           the time, "Your needs", and "Map view" sections, the grid layer
+  src/data/                categories, needs presets, New York time, heat map colors and image,
+                           Manhattan boundary
+  src/hooks.js             media query hook (phone or desktop layout)
   src/styles/              tokens, base, layout, panel, and map CSS
 server/                    FastAPI API
   main.py                  routes, caching, timing
@@ -77,7 +84,8 @@ server/                    FastAPI API
   scoring.py               the 0–100 score, with custom weights
   hours.py                 whether a place is open at a given time
   modes.py                 walking and wheelchair speeds, curb ramp penalty
-  scripts/                 downloads (graph, water, places, curb ramps) and the data check
+  grid.py                  the scored Manhattan grid, and ranking a spot against it
+  scripts/                 downloads (graph, water, places, curb ramps), the grid, and the data check
   data/                    the downloaded data (committed)
   test_*.py                tests
 render.yaml                Render setup for all three services
@@ -128,6 +136,7 @@ All routes take `lat`, `lng`, and optionally `minutes` (default 15, at most 30).
 | `GET /api/nearest-node` | The graph node closest to a point |
 | `GET /api/graph/info` | Node and segment counts |
 | `GET /api/health` | Whether the server is up and the graph is loaded |
+| `GET /api/grid` | Every 100 m square of Manhattan with its category scores, plus each category's gaps and best spot (no `lat`/`lng`) |
 
 `/api/places` and `/api/reachable` also take `weights`, for example `weights=grocery:3,park:3,school:0`. Each weight is a whole number from 0 to 3, and categories left out keep their defaults. An unknown category, a weight out of range, or all weights at 0 returns 422 with a message saying what to fix.
 
@@ -135,13 +144,15 @@ All routes take `lat`, `lng`, and optionally `minutes` (default 15, at most 30).
 
 `/api/places`, `/api/area`, and `/api/reachable` take `mode`, either `walk` (the default) or `wheelchair`. In wheelchair mode `/api/places` also returns `barriers`, the corners in reach with no curb ramp.
 
+`/api/places` returns `score.rank`, the share of Manhattan's grid squares that score lower with the same weights, or `null` in wheelchair mode or with `at` set.
+
 The site requests `/api/places` and `/api/area` at the same time, so the panel fills in while the slower area is still being built. Recent results are cached by start node. Each visitor gets 30 searches a minute per route; over that, the API returns 429 with a `Retry-After` header and the panel says how many seconds to wait. On Render the counts are kept in a free Redis-compatible Key Value instance, so they survive the API sleeping; locally they are kept in memory (`server/rate_limit.py`).
 
 Every search prints its timing to the server log, for example `/api/places nearest 1 ms, search 3 ms, places 1 ms (total 5 ms)`, and sends it in a `Server-Timing` header, visible in Chrome's DevTools under Network > Timing.
 
 ## Rebuild the data
 
-The data in `server/data/` is committed. A GitHub Actions job (`.github/workflows/refresh-data.yml`) rebuilds it on the 1st of every month: it downloads everything again (OpenStreetMap from Overpass, curb ramps from NYC Open Data), checks that no count dropped by more than 15% (`server/scripts/check_data.py`), runs the tests, and commits the new data, which makes Render redeploy. Run it by hand from the repo's **Actions** tab under **Refresh map data**. Its results table is on the run's summary page.
+The data in `server/data/` is committed. A GitHub Actions job (`.github/workflows/refresh-data.yml`) rebuilds it on the 1st of every month: it downloads everything again (OpenStreetMap from Overpass, curb ramps from NYC Open Data), checks that no count dropped by more than 15% (`server/scripts/check_data.py`), runs the tests, scores the Manhattan grid again, and commits the new data, which makes Render redeploy. Run it by hand from the repo's **Actions** tab under **Refresh map data**. Its results table is on the run's summary page.
 
 To rebuild by hand:
 
@@ -151,8 +162,9 @@ source .venv/bin/activate
 pip install -r requirements-build.txt
 python scripts/build_graph.py      # walking network
 python scripts/build_water.py      # lakes and ponds
-python scripts/build_amenities.py  # places
+python scripts/build_amenities.py  # places and park outlines
 python scripts/build_ramps.py      # curb ramps from NYC Open Data (after build_graph.py)
+python scripts/build_grid.py       # score every 100 m of Manhattan (after all the others)
 ```
 
 Public Overpass servers are often busy. Each download retries up to six times with growing waits (30 s to 5 minutes), alternating between two servers (`server/scripts/overpass.py`). Finished downloads are cached in `server/cache/`, so a script that fails partway can be run again. If the default servers are blocked where you are, choose another:
@@ -178,6 +190,7 @@ The tests cover:
 - the walking area: block interiors filled, nothing drawn over the Hudson, Harlem Meer, or the Reservoir
 - places and scoring, including custom weights, categories set to 0, and closed places
 - opening hours at different times and days
+- ranking a spot against the grid with different weights
 - the API routes, including bad `weights`, `at`, and `mode` values
 - the rate limit, with a stand-in for Redis
 
@@ -202,14 +215,15 @@ On the live site, Stadia Maps allows tiles by checking the site's domain, which 
 
 ## Design and accessibility
 
-- Mobile first: on phones the results sit in a bottom sheet over a full-screen map; from 768 px up they move to a side panel.
+- Mobile first: on phones the results sit in a bottom sheet over a full-screen map; from 768 px up they move to a side panel. The sheet has three positions: open (settings and categories), peek (just the title and score), and hidden (just the handle, so the whole map shows). Swipe up or down to move between them, or tap the handle to step hidden → peek → open → peek; the handle is a button, so it works by keyboard and screen reader too. Clicking the map brings a hidden sheet back to peek so the new score shows. Whatever is off screen is skipped by Tab.
 - Text contrast is at least 4.5:1 (WCAG 1.4.3), and every category color is at least 5:1 under white text.
 - Categories have letters as well as colors (G, T, Rx, +, P, S), so color is never the only cue (WCAG 1.4.1).
 - Buttons and rows are at least 44 px tall, and keyboard focus is always visible.
 - Score changes are announced to screen readers, and animations respect the reduced-motion setting.
 - The time and "Your needs" settings start closed, so the panel shows the score and categories first. Their current values show on the closed line, e.g. "Time: Open at 9 pm".
 - The hour is a native slider, so arrow keys work, and screen readers read the hour as "9 pm".
-- Map markers carry meaning in shape and symbol, not only color: places with no listed hours get a "?" badge, and corners without curb ramps are diamonds with "!".
+- Map markers carry meaning in shape and symbol, not only color: places with no listed hours get a "?" badge, corners without curb ramps are diamonds with "!", and the gap finder's best spot is a star.
+- The score map and gap finder are off until chosen under "Map view". While one is on, a box at the top of the panel names it, explains it in words (the legend labels the scale with numbers and both ends in words, and the gap finder names the best spot by its cross streets), and has a "Back to your walk" button. Clicking the map also goes back.
 
 Not yet supported: choosing a point by keyboard. An address search would fix that.
 

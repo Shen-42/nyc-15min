@@ -13,6 +13,7 @@ It writes data/ramps.json.
 
 import json
 import math
+import re
 import sys
 import time
 import urllib.error
@@ -91,14 +92,43 @@ def lat_lng(value):
     return None
 
 
+def ordinal(n):
+    n = int(n)
+    if 11 <= n % 100 <= 13:
+        return f"{n}th"
+    return f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }"
+
+
+def street_name(text):
+    """ "WEST  125 STREET" -> "West 125th Street"."""
+    name = " ".join(word.capitalize() for word in (text or "").split())
+    return re.sub(r"\b(\d+) (Street|Avenue|Place|Road|Drive|Terrace)\b", lambda m: f"{ordinal(m[1])} {m[2]}", name)
+
+
+# Words that mark a highway or its exit ramps ("Henry Hudson Parkway Et 17 Sb").
+# Nobody stands at those corners, so they're no use for naming a spot.
+HIGHWAY_WORDS = {"Parkway", "Expressway", "Highway", "Fdr", "Et", "Exit", "Ramp", "Sb", "Nb", "Eb", "Wb"}
+
+
+def usable_corner(a, b):
+    if not a or not b or a in b or b in a:
+        return False
+    if HIGHWAY_WORDS & set((a + " " + b).split()):
+        return False
+    return not {"Harlem River Drive", "Dead End"} & {a, b}
+
+
 def download_ramps(column, land):
+    """Ramp points in Manhattan, and {corner id: (lat, lng, street, street)}
+    for naming spots by their cross streets (card 12)."""
     west, south, east, north = land.bounds
     where = f"within_box({column}, {north}, {west}, {south}, {east})"
     ramps = []
+    corners = {}
     offset = 0
     while True:
         query = urllib.parse.urlencode({
-            "$select": column,
+            "$select": f"{column},cornerid,stname1,stname2",
             "$where": where,
             "$order": ":id",
             "$limit": PAGE_SIZE,
@@ -109,9 +139,13 @@ def download_ramps(column, land):
             point = lat_lng(row.get(column))
             if point and land.contains(Point(point[1], point[0])):
                 ramps.append(point)
+                a, b = street_name(row.get("stname1")), street_name(row.get("stname2"))
+                corner = row.get("cornerid")
+                if usable_corner(a, b) and corner and corner not in corners:
+                    corners[corner] = [round(point[0], 6), round(point[1], 6), a, b]
         print(f"  {offset + len(rows):,} rows read, {len(ramps):,} ramps in Manhattan so far")
         if len(rows) < PAGE_SIZE:
-            return ramps
+            return ramps, list(corners.values())
         offset += PAGE_SIZE
 
 
@@ -125,7 +159,7 @@ def main():
     land = load_land(LAND_FILE)
     column, updated = point_column()
     print(f"Downloading curb ramps from NYC Open Data ({DATASET})...")
-    ramps = download_ramps(column, land)
+    ramps, corners = download_ramps(column, land)
     if not ramps:
         sys.exit("No ramps came back. Not saving.")
 
@@ -147,11 +181,15 @@ def main():
             "ramp_radius_m": RAMP_RADIUS_M,
         },
         "no_ramp_nodes": no_ramp,
+        # [lat, lng, street, street] for each corner, to name a spot by its
+        # cross streets (card 12).
+        "corners": corners,
     }, separators=(",", ":")))
     print(f"\nSaved to {OUTPUT_FILE}")
     print(f"  ramps in Manhattan        {len(ramps):,}")
     print(f"  street corners checked    {len(curbs):,}")
     print(f"  corners with no ramp      {len(no_ramp):,} ({share:.0%})")
+    print(f"  named corners             {len(corners):,}, e.g. " + "; ".join(f"{c[2]} & {c[3]}" for c in corners[:3]))
     if share > 0.3:
         print("  That's a lot. Check RAMP_RADIUS_M and the dataset before relying on it.")
 

@@ -35,12 +35,18 @@
   align-items: center;
 }
 
+/* The number takes column 1, every line of text column 2, however many lines. */
 .score-summary__number {
-  grid-row: span 2;
+  grid-column: 1;
+  grid-row: 1 / span 3;
   font-size: var(--text-score);
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+
+.score-summary > :not(.score-summary__number) {
+  grid-column: 2;
 }
 
 .score-summary__verdict {
@@ -54,35 +60,40 @@
   font-size: var(--text-sm);
 }
 
-/* ---- Show/hide categories (phones only) ---- */
+/* ---- The two halves of the panel. On phones the first is what shows
+   while the bottom sheet is closed (see layout.css). ---- */
 
-.panel__toggle {
-  min-height: var(--tap-target);
-  padding: 0 var(--space-4);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  cursor: pointer;
+.panel__top,
+.panel__peek,
+.panel__more {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .category-list {
-  display: none;
   list-style: none;
   padding: 0;
 }
 
-.panel--expanded .category-list {
-  display: block;
+/* The grab handle at the top of the bottom sheet (phones only). */
+.sheet-handle {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: var(--tap-target);
+  margin-bottom: calc(-1 * var(--space-4));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
 }
 
-@media (min-width: 768px) {
-  .panel__toggle {
-    display: none;
-  }
-
-  .category-list {
-    display: block;
-  }
+.sheet-handle__bar {
+  width: 40px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--color-line);
 }
 
 /* ---- Category rows ---- */
@@ -384,4 +395,65 @@
   transform: rotate(45deg);
   background: var(--color-ink);
   vertical-align: 0.05em;
+}
+
+/* ---- Rank and the score map / gap finder box (card 12) ---- */
+
+.score-summary__rank {
+  font-weight: 700;
+}
+
+.layer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunk);
+}
+
+.layer__title {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.layer__text {
+  font-size: var(--text-sm);
+}
+
+.layer__select {
+  padding: 0;
+}
+
+.layer__back {
+  align-self: flex-start;
+}
+
+.legend {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.legend__bar {
+  height: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--gradient);
+  border: 1px solid rgb(0 0 0 / 0.2);
+}
+
+.legend__ticks,
+.legend__ends {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.legend__ticks {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.legend__ends > span:last-child {
+  text-align: right;
 }
