@@ -44,6 +44,16 @@ def load_land(path):
     return shapely.make_valid(unary_union(polygons))
 
 
+def load_parks(path):
+    """Park outlines from scripts/build_amenities.py as a list of (name or None, shape in (lng, lat))."""
+    parks = []
+    for park in json.loads(Path(path).read_text()):
+        rings = [Polygon([(lng, lat) for lat, lng in ring]) for ring in park["rings"] if len(ring) >= 4]
+        if rings:
+            parks.append((park["name"], shapely.make_valid(unary_union(rings))))
+    return parks
+
+
 def load_water(path):
     """Lakes and ponds inside Manhattan as a list of (name or None, shape in (lng, lat))."""
     items = json.loads(Path(path).read_text())

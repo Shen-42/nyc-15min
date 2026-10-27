@@ -24,7 +24,7 @@ export default function NeedsProfile({ weights, onChange, mode, onModeChange }) 
 
       <div className="needs__body">
         <fieldset className="needs__presets">
-          <legend className="needs__legend">How you get around</legend>
+          <legend className="needs__legend">Getting around</legend>
           {MODES.map((m) => (
             <button
               key={m.id}
@@ -39,7 +39,7 @@ export default function NeedsProfile({ weights, onChange, mode, onModeChange }) 
         </fieldset>
 
         <fieldset className="needs__presets">
-          <legend className="needs__legend">Start from</legend>
+          <legend className="needs__legend">Presets</legend>
           {PRESETS.map((p) => (
             <button
               key={p.id}
@@ -54,7 +54,7 @@ export default function NeedsProfile({ weights, onChange, mode, onModeChange }) 
         </fieldset>
 
         <fieldset className="needs__weights">
-          <legend className="needs__legend">How much each matters</legend>
+          <legend className="needs__legend">Importance</legend>
           {CATEGORIES.map((category) => {
             const value = weights[category.id];
             const onlyOneLeft = value > 0 && Object.values(weights).filter((w) => w > 0).length === 1;
@@ -80,7 +80,7 @@ export default function NeedsProfile({ weights, onChange, mode, onModeChange }) 
           })}
         </fieldset>
 
-        <p className="needs__note">Your choice is saved in this browser.</p>
+        <p className="needs__note">Saved in this browser.</p>
       </div>
     </details>
   );

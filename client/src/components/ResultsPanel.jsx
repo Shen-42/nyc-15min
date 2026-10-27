@@ -77,7 +77,7 @@ export default function ResultsPanel({
 
       {serverDown && (
         <p className="message message--error" role="alert">
-          Can't reach the server. Reload the page in a minute to try again.
+          Can't reach the server. Try reloading the page in a minute.
         </p>
       )}
 
@@ -90,7 +90,7 @@ export default function ResultsPanel({
       {/* Screen readers announce changes in this region (search started, finished, failed). */}
       <div role="status" aria-live="polite">
         {!result && !loading && !message && (
-          <p className="panel__intro">Pick a spot in Manhattan to see what you can reach on foot in 15 minutes.</p>
+          <p className="panel__intro">Choose a spot in Manhattan to see what's within a 15-minute walk.</p>
         )}
         {!result && loading && <p className="panel__intro">Finding everything within a 15-minute walk…</p>}
         {message && <p className={`message message--${message.kind}`}>{message.text}</p>}
@@ -118,16 +118,16 @@ export default function ResultsPanel({
               <p className="score-summary__rank">Better than {result.score.rank}% of Manhattan.</p>
             )}
             <p className="score-summary__detail">
-              {result.mode === "wheelchair" && "Within 15 minutes by wheelchair. "}
-              The nearest of each is {result.score.proximity_minutes} minutes away on average.
-              {timeLabel && ` Counting places open at ${timeLabel}.`}
+              {result.mode === "wheelchair" && "By wheelchair. "}
+              Nearest of each: {result.score.proximity_minutes} min away on average.
+              {timeLabel && ` Only places open at ${timeLabel} count.`}
               {result.mode === "wheelchair" && result.barriers.length > 0 && (
                 <>
                   {" "}
                   {result.barriers.length === 1 ? "1 corner" : `${result.barriers.length} corners`} in reach{" "}
-                  {result.barriers.length === 1 ? "has" : "have"} no listed curb ramp (
+                  {result.barriers.length === 1 ? "lacks" : "lack"} a listed curb ramp (
                   <span className="barrier-key" aria-hidden="true" />
-                  <span className="visually-hidden">dark diamonds</span> on the map).
+                  <span className="visually-hidden">dark diamonds on the map</span>).
                 </>
               )}
             </p>

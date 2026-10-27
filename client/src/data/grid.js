@@ -2,8 +2,8 @@
 // server/scripts/build_grid.py. Each cell is [lat, lng, [score per
 // category], [minutes to the nearest place per category, or null], 1 if
 // mostly inside a park]. Park cells are left out of the score map and the
-// gaps, since nobody lives there. The grid also lists "blank" outlines (big
-// parks and lakes) that the map leaves empty.
+// gaps, since nobody lives there. The grid also lists the outlines of the
+// parks (blank on the gap finder) and the lakes (blank on both maps).
 
 export function inPark(cell) {
   return cell[4] === 1;
@@ -22,8 +22,8 @@ export const HEAT_STOPS = [
 
 // The legend's labels, matching the verdicts in categories.js at each end.
 export const HEAT_LEGEND = {
-  low: "Little within a 15-minute walk",
-  high: "Errands all a short walk away",
+  low: "Little nearby",
+  high: "Everything nearby",
   ticks: [0, 25, 50, 75, 100],
 };
 

@@ -49,9 +49,9 @@ MAX_PLACE_LABEL_M = 600
 # spots, the rank, and the heat map.
 PARK_SAMPLES = 3
 PARK_SHARE = 0.5
-# Parks at least this big are cut out of the heat map and gap finder image,
-# so they show blank with clean edges. 0 means every park; the lakes are
-# always cut out.
+# Parks at least this big are cut out of the gap finder image, so they show
+# blank with clean edges. 0 means every park. (The score map fills parks in
+# from the blocks around them instead.)
 BLANK_MIN_M2 = 0
 
 CATEGORIES = list(CATEGORY_SETTINGS)
@@ -186,11 +186,14 @@ def park_checker(parks):
     return in_park
 
 
-def blank_rings(parks, water):
-    """Outlines the map leaves blank: big parks and the lakes, as [[lat, lng], ...]."""
-    rings = [ring for ring, _, area in parks if area >= BLANK_MIN_M2]
-    rings += [[[round(lat, 6), round(lng, 6)] for lat, lng in polygon[0]] for polygon in water]
-    return rings
+def park_rings(parks):
+    """Park outlines the gap finder leaves blank, as [[lat, lng], ...]."""
+    return [ring for ring, _, area in parks if area >= BLANK_MIN_M2]
+
+
+def water_rings(water):
+    """Lake and pond outlines both maps leave blank, as [[lat, lng], ...]."""
+    return [[[round(lat, 6), round(lng, 6)] for lat, lng in polygon[0]] for polygon in water]
 
 
 def main():
@@ -282,8 +285,10 @@ def main():
         # [lat, lng, [score per category], [minutes to the nearest, or null], 1 if mostly park]
         "cells": cells,
         "gaps": gaps,
-        # Big parks and lakes, for the map to leave blank.
-        "blank": blank_rings(parks, water),
+        # Outlines for the map to leave blank: parks (gap finder only) and
+        # lakes (both maps).
+        "parks": park_rings(parks),
+        "water": water_rings(water),
     }, separators=(",", ":")))
     size_kb = OUTPUT_FILE.stat().st_size / 1000
     print(f"Saved {len(cells):,} cells to {OUTPUT_FILE} ({size_kb:.0f} KB) in {time.time() - started:.0f} s")

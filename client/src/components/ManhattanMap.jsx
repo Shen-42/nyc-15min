@@ -79,26 +79,31 @@ export default function ManhattanMap({
 }) {
   // What the score map or gap finder draws (card 12): a value for each grid
   // cell, and a color for each value. data/gridImage.js smooths the values
-  // into a gradient. Park cells have no value, and parks and lakes are cut
-  // out of the image, since nobody lives there.
+  // into a gradient. Park cells have no value, since nobody lives there.
   const layer = useMemo(() => {
     if (!grid || view === "walk") return null;
     const categories = grid.meta.categories;
     if (view === "heat") {
+      // Parks have no value of their own (nobody lives there), and are
+      // filled in from the blocks around them so the gradient has no holes.
       return {
         valueFor: (cell) => (inPark(cell) ? null : cellScore(cell, categories, weights)),
         colorFor: (score) => [...heatColor(score), 1],
         sigma: 1.2,
+        fill: true,
+        blank: grid.water,
       };
     }
     // Gaps take their category's color, the same as its markers. The value
     // is the share of nearby cells that are gaps, so lone squares stay faint
     // and clusters show solid.
     const rgb = hexToRgb(getComputedStyle(document.documentElement).getPropertyValue(`--cat-${gapCategory}`).trim());
+    // A gap in a park means nothing, so parks stay blank here.
     return {
       valueFor: (cell) => (inPark(cell) ? null : isGap(cell, categories, gapCategory) ? 1 : 0),
       colorFor: (share) => (share < 0.1 ? null : [...rgb, 0.9 * smoothstep(0.1, 0.45, share)]),
       sigma: 0.9,
+      blank: [...grid.parks, ...grid.water],
     };
   }, [grid, view, weights, gapCategory]);
 
@@ -143,7 +148,7 @@ export default function ManhattanMap({
       {/* GeoJSON doesn't redraw when its data changes, so a new key forces
           a fresh layer. The key changes when a new result arrives, not when
           the dot moves, which happens before the result is back. */}
-      {layer && <GridLayer cells={grid.cells} cellM={grid.meta.cell_m} blank={grid.blank} {...layer} />}
+      {layer && <GridLayer cells={grid.cells} cellM={grid.meta.cell_m} {...layer} />}
 
       {best && (
         <Marker position={[best.lat, best.lng]} icon={STAR_ICON} keyboard={false}>

@@ -13,13 +13,13 @@ export default function LayerInfo({ view, grid, gridError, gapCategory, onGapCat
       </h2>
 
       {gridError && <p className="message message--error">{gridError}</p>}
-      {!grid && !gridError && <p className="needs__note">Loading the map of Manhattan…</p>}
+      {!grid && !gridError && <p className="needs__note">Loading map data…</p>}
 
       {grid && view === "heat" && (
         <>
           <p className="layer__text">
-            Every 100 m square of Manhattan, scored with your needs for a 15-minute walk. Parks and
-            water are left blank, since nobody lives there. Click anywhere to see a spot in detail.
+            Scores across Manhattan for a 15-minute walk, weighted by your needs. Parks show the scores of
+            the blocks around them. Click a street for details.
           </p>
           {/* A gradient bar with numbers under it and words at both ends, so
               the colors never have to be told apart alone. */}
@@ -77,22 +77,20 @@ function GapText({ grid, categoryId, onCategory }) {
       </label>
 
       {gap.cells === 0 ? (
-        <p className="layer__text">
-          No gaps. Every part of Manhattan has a {category.one} within a 15-minute walk.
-        </p>
+        <p className="layer__text">No gaps: every part of Manhattan has a {category.one} within a 15-minute walk.</p>
       ) : (
         <>
           <p className="layer__text">
             <strong>
               {gap.cells.toLocaleString()} of {total.toLocaleString()}
             </strong>{" "}
-            100 m squares where people live (parks and water left out) have no {category.one} within a
-            15-minute walk. They're shaded on the map.
+            areas (100 m squares, parks excluded) have no {category.one} within a 15-minute walk. They're
+            shaded on the map.
           </p>
           {best && (
             <p className="layer__text">
-              One new {category.one} {where} would put <strong>{best.fixes.toLocaleString()}</strong> of them
-              within 15 minutes. It's marked with a star on the map.
+              A new {category.one} {where} would serve <strong>{best.fixes.toLocaleString()}</strong> of them
+              (★ on the map).
             </p>
           )}
         </>

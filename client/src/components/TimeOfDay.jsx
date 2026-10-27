@@ -49,8 +49,8 @@ export default function TimeOfDay({ hour, onChange }) {
 
         <p className="needs__note">
           {hour === null
-            ? "Opening hours aren't checked. Move the slider to see what's open at a given hour."
-            : `${now.weekday}, New York time. Places with no listed hours (?) count as open.`}
+            ? "All places count. Move the slider to count only those open at that hour."
+            : `${now.weekday}, New York time. Places without listed hours (?) count as open.`}
         </p>
       </div>
     </details>

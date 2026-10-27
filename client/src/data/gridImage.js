@@ -5,15 +5,23 @@
 // with weights that fall off smoothly with distance (a Gaussian, sigma in
 // grid cells). Dividing by the summed weights ("normalized convolution")
 // keeps edges and small holes from fading toward zero: a small park is filled
-// in by its neighbors, while the far edge of the data fades out softly. The
-// image is then cut to Manhattan's shoreline so nothing spills into the
-// rivers, and parks and lakes are cut out of it, since nobody lives there.
+// in by its neighbors. The image is then cut to Manhattan's shoreline so
+// nothing spills into the rivers, and any "blank" outlines (lakes, and for the
+// gap finder, parks) are cut out of it.
+//
+// With fill on (the score map), cells with no value, the parks, are colored
+// from the blocks around them: where the normal smoothing has no data, a much
+// wider one takes over, so even the middle of Central Park gets a color that
+// blends with its edges instead of a hole.
 
 const M_PER_DEG_LAT = 110_540;
 // build_grid.py spaces columns using the longitude scale at this latitude.
 const GRID_LAT0 = 40.78;
 // Image pixels per grid cell. The browser smooths it further when zooming in.
 const PIXELS_PER_CELL = 6;
+// The wide smoothing that fills parks on the score map, in grid cells. Five
+// cells (500 m) reaches the middle of Central Park, 800 m across.
+const FILL_SIGMA = 5;
 
 // Leaflet stretches an image evenly in Web Mercator, not in latitude, so
 // image rows are placed by Mercator y.
@@ -77,7 +85,8 @@ function sample(field, cols, rows, gx, gy) {
 //   colorFor(value): [r, g, b, alpha 0-1], or null to leave the spot clear.
 //   sigma: how far the smoothing reaches, in grid cells.
 //   land: outlines to keep, as [[lat, lng], ...]; blank: outlines to cut out.
-export function gridImage({ cells, cellM, valueFor, colorFor, sigma, land, blank = [] }) {
+//   fill: color cells with no value from their surroundings (see above).
+export function gridImage({ cells, cellM, valueFor, colorFor, sigma, land, blank = [], fill = false }) {
   const stepLat = cellM / M_PER_DEG_LAT;
   const stepLng = cellM / (111_320 * Math.cos((GRID_LAT0 * Math.PI) / 180));
   let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
@@ -90,7 +99,8 @@ export function gridImage({ cells, cellM, valueFor, colorFor, sigma, land, blank
 
   // A margin of empty cells so the fade at the edges isn't cut off.
   const kernel = gaussianKernel(sigma);
-  const pad = kernel.radius + 1;
+  const wide = gaussianKernel(FILL_SIGMA);
+  const pad = (fill ? wide : kernel).radius + 1;
   const cols = Math.round((maxLng - minLng) / stepLng) + 1 + 2 * pad;
   const rows = Math.round((maxLat - minLat) / stepLat) + 1 + 2 * pad;
   const lat0 = minLat - pad * stepLat;
@@ -113,6 +123,8 @@ export function gridImage({ cells, cellM, valueFor, colorFor, sigma, land, blank
   const valueSum = blur(values, cols, rows, kernel);
   const weightSum = blur(hasData, cols, rows, kernel);
   const landSum = blur(isLand, cols, rows, kernel);
+  const wideValueSum = fill ? blur(values, cols, rows, wide) : null;
+  const wideWeightSum = fill ? blur(hasData, cols, rows, wide) : null;
 
   const south = lat0, north = lat0 + (rows - 1) * stepLat;
   const west = lng0, east = lng0 + (cols - 1) * stepLng;
@@ -131,15 +143,28 @@ export function gridImage({ cells, cellM, valueFor, colorFor, sigma, land, blank
     for (let px = 0; px < width; px++) {
       const gx = (px + 0.5) / PIXELS_PER_CELL;
       const weight = sample(weightSum, cols, rows, gx, gy);
-      if (weight < 0.05) continue;
-      const color = colorFor(sample(valueSum, cols, rows, gx, gy) / weight);
+      let value, alpha;
+      if (fill) {
+        // Blend from the normal smoothing to the wide one as data runs out.
+        const wideWeight = sample(wideWeightSum, cols, rows, gx, gy);
+        if (wideWeight < 1e-4) continue;
+        const wideValue = sample(wideValueSum, cols, rows, gx, gy) / wideWeight;
+        const t = smoothstep(0.05, 0.3, weight);
+        value = t > 0 ? t * (sample(valueSum, cols, rows, gx, gy) / Math.max(weight, 1e-6)) + (1 - t) * wideValue : wideValue;
+        alpha = 1;
+      } else {
+        if (weight < 0.05) continue;
+        value = sample(valueSum, cols, rows, gx, gy) / weight;
+        // Full color everywhere people live, right up to the shoreline (the
+        // image is cut to it below). Only where most nearby land is park
+        // (cells with no value), such as a highway strip running through a
+        // park, does the color drop out.
+        const land = sample(landSum, cols, rows, gx, gy);
+        alpha = smoothstep(0.25, 0.4, weight / land);
+      }
+      const color = colorFor(value);
       if (!color) continue;
-      // Full color everywhere people live, right up to the shoreline (the
-      // image is cut to it below). Only where most nearby land is park
-      // (cells with no value), such as a highway strip running through a
-      // park, does the color drop out.
-      const land = sample(landSum, cols, rows, gx, gy);
-      const alpha = color[3] * smoothstep(0.25, 0.4, weight / land);
+      alpha *= color[3];
       const i = (py * width + px) * 4;
       image.data[i] = color[0];
       image.data[i + 1] = color[1];

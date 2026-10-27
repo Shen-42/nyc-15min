@@ -85,7 +85,7 @@ export default function App() {
     apiFetch("/api/grid", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
       .then(setGrid)
-      .catch(() => setGridError("Couldn't load the map of Manhattan. Try again in a minute."));
+      .catch(() => setGridError("Couldn't load map data. Try again in a minute."));
   }, [view, grid]);
 
   // A new way of getting around changes the shaded area too, so search again in full.
@@ -220,7 +220,7 @@ export default function App() {
       setSelectedPoint(null);
       setResult(null);
       setStatus("idle");
-      setMessage({ kind: "warn", text: "Only Manhattan is available for now. Pick a spot on the island." });
+      setMessage({ kind: "warn", text: "Only Manhattan is covered for now. Choose a spot on the island." });
     }
   }
 

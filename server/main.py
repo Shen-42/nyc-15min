@@ -23,7 +23,7 @@ from hours import parse_at, status_at
 from modes import NO_RAMP_PENALTY_MIN, SPEEDS, load_no_ramp_nodes, parse_mode
 from rate_limit import RateLimited, RateLimiter, make_counter
 from scoring import parse_weights, score_walk, settings_with_weights
-from walk_area import load_land, load_water, walking_area
+from walk_area import load_land, load_parks, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.json"
 LAND_FILE = Path(__file__).parent / "data" / "manhattan-boundary.json"
@@ -31,6 +31,7 @@ WATER_FILE = Path(__file__).parent / "data" / "water.json"
 AMENITIES_FILE = Path(__file__).parent / "data" / "amenities.json"
 RAMPS_FILE = Path(__file__).parent / "data" / "ramps.json"
 GRID_FILE = Path(__file__).parent / "data" / "grid.json"
+PARKS_FILE = Path(__file__).parent / "data" / "parks.json"
 
 # Clicks farther than this from any street or path (the middle of a lake or a
 # rail yard) are turned away instead of starting from a far-off path.
@@ -43,6 +44,8 @@ walk_graph = None
 land = None
 # Lakes and ponds as (name, shape), for turning away clicks on water.
 water = []
+# Parks as (name, shape), for turning away clicks in a park: nobody lives there.
+parks = []
 # Groceries, pharmacies, clinics, parks, schools, and subway stations.
 amenities = []
 # The same places by id, for looking up opening hours.
@@ -56,7 +59,7 @@ grid = None
 
 @asynccontextmanager
 async def lifespan(app):
-    global walk_graph, land, water, amenities, amenity_by_id, ramp_penalty, grid
+    global walk_graph, land, water, parks, amenities, amenity_by_id, ramp_penalty, grid
     if AMENITIES_FILE.exists():
         amenities = load_amenities(AMENITIES_FILE)
         amenity_by_id = {a["id"]: a for a in amenities}
@@ -69,6 +72,11 @@ async def lifespan(app):
         print(f"Loaded {len(water)} lakes and ponds")
     else:
         print(f"No water file at {WATER_FILE}. Run: python scripts/build_water.py")
+    if PARKS_FILE.exists():
+        parks = load_parks(PARKS_FILE)
+        print(f"Loaded {len(parks)} parks")
+    else:
+        print(f"No parks file at {PARKS_FILE}. Run: python scripts/build_amenities.py")
     if LAND_FILE.exists():
         land = load_land(LAND_FILE)
         if water:
@@ -171,7 +179,7 @@ def check_rate_limit(key):
     except RateLimited as limited:
         raise HTTPException(
             status_code=429,
-            detail=f"Too many searches in a minute. Try again in {limited.retry_after} seconds.",
+            detail=f"Too many searches. Try again in {limited.retry_after} seconds.",
             headers={"Retry-After": str(limited.retry_after)},
         )
 
@@ -190,7 +198,14 @@ def plan_walk(request, kind, lat, lng, minutes, timer, mode="walk"):
     for name, shape in water:
         if shape.contains(clicked):
             where = name or "the water"
-            raise HTTPException(status_code=422, detail=f"That spot is in {where}. Try clicking on land.")
+            raise HTTPException(status_code=422, detail=f"That spot is in {where}. Choose a spot on land.")
+    for name, shape in parks:
+        if shape.contains(clicked):
+            where = name or "a park"
+            raise HTTPException(
+                status_code=422,
+                detail=f"That spot is in {where}. Choose a spot on a nearby street.",
+            )
 
     start, gap_m = graph.nearest_node(lat, lng)
     timer.lap("nearest")
@@ -198,7 +213,7 @@ def plan_walk(request, kind, lat, lng, minutes, timer, mode="walk"):
     if gap_m > MAX_START_GAP_M:
         raise HTTPException(
             status_code=422,
-            detail=f"That spot is {gap_m:.0f} m from the nearest street or path. Try clicking closer to one.",
+            detail=f"That spot is {gap_m:.0f} m from the nearest street or path. Choose a spot closer to one.",
         )
 
     # The click is usually a few meters from the nearest node. Count that

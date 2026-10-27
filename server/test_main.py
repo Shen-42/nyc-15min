@@ -157,3 +157,23 @@ def test_grid_and_rank():
         chair = c.get("/api/places", params={**times_square, "mode": "wheelchair"}).json()
         assert chair["score"]["rank"] is None
     rate_limiter.counter.clear()
+
+
+def test_clicks_in_a_park_are_turned_away():
+    from pathlib import Path
+
+    import pytest
+
+    data = Path(__file__).parent / "data"
+    if not (data / "walk_graph.json").exists() or not (data / "parks.json").exists():
+        pytest.skip("run scripts/build_graph.py and scripts/build_amenities.py first")
+    from main import rate_limiter
+
+    rate_limiter.counter.clear()
+    with TestClient(app) as c:
+        sheep_meadow = c.get("/api/places", params={"lat": 40.7716, "lng": -73.9750})
+        assert sheep_meadow.status_code == 422
+        assert "park" in sheep_meadow.json()["detail"].lower()
+        times_square = c.get("/api/places", params={"lat": 40.758, "lng": -73.9855})
+        assert times_square.status_code == 200
+    rate_limiter.counter.clear()

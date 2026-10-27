@@ -22,7 +22,7 @@ export default function BarrierMarkers({ barriers }) {
       keyboard={false}
     >
       <Tooltip direction="top" offset={[0, -10]} className="place-tooltip">
-        No curb ramp listed at this corner, {formatMinutes(b.minutes)}
+        No listed curb ramp, {formatMinutes(b.minutes)}
       </Tooltip>
     </Marker>
   ));

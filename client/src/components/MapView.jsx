@@ -28,7 +28,7 @@ export default function MapView({ view, onChange }) {
           ))}
         </div>
         <p className="needs__note">
-          The score map and gap finder cover all of Manhattan, walking at any time.
+          These views cover all of Manhattan, on foot, at any hour.
         </p>
       </div>
     </details>
