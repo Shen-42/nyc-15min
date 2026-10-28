@@ -118,6 +118,26 @@ app = FastAPI(
 # Compress responses over 1 KB. A search result shrinks to about a quarter.
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+# Security headers on every API response. The API only returns JSON, so it
+# may not be framed or treated as a page, and browsers shouldn't guess types.
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Strict-Transport-Security": "max-age=31536000",
+}
+# Not on /docs, the interactive docs page used locally, which needs scripts.
+API_CSP = "default-src 'none'; frame-ancestors 'none'"
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    if not request.url.path.startswith(("/docs", "/redoc")):
+        response.headers.setdefault("Content-Security-Policy", API_CSP)
+    return response
+
 # On Render the site and the API have different addresses, so the browser
 # needs permission to call the API from the site. ALLOWED_ORIGINS lists the
 # site's address (comma-separated if more than one). Locally, Vite forwards

@@ -54,6 +54,28 @@ services:
     runtime: static
     buildCommand: cd client && npm ci && npm run build
     staticPublishPath: client/dist
+    # Security headers for every page. The Content-Security-Policy lists the
+    # only places the site may load from or talk to: itself, the map tiles,
+    # the API, and Supabase (sign-in). Anything else, such as a script
+    # injected into the page, is blocked. 'unsafe-inline' for styles is
+    # needed by Leaflet and by React's style attributes; scripts get no such
+    # exception. frame-ancestors 'none' stops other sites from framing it.
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tiles.stadiamaps.com; font-src 'self' data:; connect-src 'self' https://nyc-15min-api.onrender.com https://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(), microphone=(), geolocation=(), payment=()"
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=31536000
     envVars:
       - key: NODE_VERSION
         value: "22"

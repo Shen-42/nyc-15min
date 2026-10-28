@@ -177,3 +177,9 @@ def test_clicks_in_a_park_are_turned_away():
         times_square = c.get("/api/places", params={"lat": 40.758, "lng": -73.9855})
         assert times_square.status_code == 200
     rate_limiter.counter.clear()
+
+
+def test_security_headers():
+    res = client.get("/api/health")
+    assert res.headers["x-content-type-options"] == "nosniff"
+    assert "frame-ancestors 'none'" in res.headers["content-security-policy"]
