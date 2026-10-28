@@ -1,8 +1,8 @@
-fastapi>=0.115
-uvicorn[standard]>=0.30
-httpx>=0.27
-pytest>=8.0
-shapely>=2.0
-redis>=5.0
-opening-hours-py>=2.1
-pyjwt[crypto]>=2.10
+fastapi>=0.162.0
+uvicorn[standard]>=0.54.0
+httpx>=0.28.1
+pytest>=9.1.1
+shapely>=2.2.0
+redis>=8.1.0
+opening-hours-py>=2.1.4
+pyjwt[crypto]>=2.15.1
