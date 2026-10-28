@@ -9,10 +9,10 @@ services:
     plan: free
     rootDir: server
     buildCommand: pip install -r requirements.txt
-    # --proxy-headers/--forwarded-allow-ips: requests reach the app through
-    # Render's proxy, so read the visitor's real IP from the header it adds.
-    # The rate limit in main.py counts searches per visitor IP.
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    # The rate limit counts searches per visitor IP. It reads the address
+    # from X-Forwarded-For itself (main.py, client_ip), counting from the end
+    # so a visitor can't fake it. Uvicorn is not told to trust that header.
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION

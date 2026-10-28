@@ -267,7 +267,7 @@ Not yet supported: choosing a point by keyboard. An address search would fix tha
 - No SQL is written by hand. The API reaches the database through Supabase's REST API with every value sent as a parameter: user ids come from a verified sign-in token, saved-place ids must be UUIDs, and everything else is checked before use.
 - React escapes all text it renders, including place names from OpenStreetMap and saved-place names. The few map markers built from HTML use fixed strings only.
 - The site sends a Content-Security-Policy (set in `render.yaml`) that allows scripts only from itself and connections only to the API, the map tiles, and Supabase. Both the site and the API send `nosniff`, HSTS, and headers that forbid other sites from framing them.
-- The API accepts requests only from the site's address (CORS), limits each visitor to 30 searches a minute, and has its interactive docs turned off on Render.
+- The API accepts requests only from the site's address (CORS), limits each visitor to 30 searches a minute, and has its interactive docs turned off on Render. The rate limit identifies visitors by the address Cloudflare and Render add to `X-Forwarded-For`, counted from the end of the list, so a made-up header can't get around it.
 - Dependabot (`.github/dependabot.yml`) opens a weekly pull request for outdated or vulnerable Python packages, npm packages, and GitHub Actions.
 
 ## Data and credits

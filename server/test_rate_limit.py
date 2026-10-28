@@ -77,3 +77,23 @@ def test_a_broken_counter_lets_searches_through():
             raise ConnectionError("redis is down")
 
     RateLimiter(1, Broken()).check("a")  # no exception
+
+
+def make_request(forwarded_for=None):
+    from starlette.requests import Request
+
+    headers = [(b"x-forwarded-for", forwarded_for.encode())] if forwarded_for else []
+    return Request({"type": "http", "headers": headers, "client": ("127.0.0.1", 5000)})
+
+
+def test_client_ip_cant_be_faked_with_a_header():
+    from main import client_ip
+
+    # Real lists from Render, October 2026: visitor, Cloudflare, Render.
+    assert client_ip(make_request("146.70.201.49, 172.64.213.140, 10.30.185.5")) == "146.70.201.49"
+    # A visitor who adds their own X-Forwarded-For still gets their real address.
+    forged = "10.9.9.9,146.70.201.49, 104.23.160.236, 10.27.26.237"
+    assert client_ip(make_request(forged)) == "146.70.201.49"
+    assert client_ip(make_request("1.1.1.1, 2.2.2.2, " + forged)) == "146.70.201.49"
+    # Locally there's no header: the connection's address.
+    assert client_ip(make_request()) == "127.0.0.1"

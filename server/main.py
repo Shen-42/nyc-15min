@@ -155,29 +155,6 @@ if allowed_origins:
     )
 
 
-# TEMPORARY: shows how Render's proxy passes on the visitor's address, so
-# the rate limit can key on one that can't be forged. Off unless the
-# SHOW_CLIENT_IP=1 setting is on. Remove once the rate limit is fixed.
-CLIENT_IP_HEADERS = [
-    "x-forwarded-for",
-    "cf-connecting-ip",
-    "true-client-ip",
-    "x-real-ip",
-    "forwarded",
-    "x-envoy-external-address",
-]
-
-
-@app.get("/api/debug/ip")
-def debug_ip(request: Request):
-    if os.environ.get("SHOW_CLIENT_IP") != "1":
-        raise HTTPException(status_code=404, detail="Not Found")
-    return {
-        "client_host_seen_by_app": request.client.host if request.client else None,
-        "headers": {h: request.headers.get(h) for h in CLIENT_IP_HEADERS},
-    }
-
-
 def require_graph():
     if walk_graph is None:
         raise HTTPException(
@@ -226,6 +203,23 @@ rate_limiter = RateLimiter(SEARCHES_PER_MINUTE, make_counter())
 usage = make_usage()
 
 
+def client_ip(request):
+    """The visitor's real address, for the rate limit.
+
+    On Render a request passes through Cloudflare, then Render's load
+    balancer, and each adds to the X-Forwarded-For list:
+        [anything the visitor sent..., visitor, Cloudflare, Render]
+    (measured October 2026). Entries a visitor sends themselves come first
+    and can be made up, so the address is counted from the end, where only
+    Cloudflare and Render write. Locally there's no such header, and the
+    connection's own address is used.
+    """
+    hops = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",") if h.strip()]
+    if len(hops) >= 3:
+        return hops[-3]
+    return request.client.host if request.client else "unknown"
+
+
 def check_rate_limit(key):
     try:
         rate_limiter.check(key)
@@ -244,7 +238,7 @@ def plan_walk(request, kind, lat, lng, minutes, timer, mode="walk"):
     Returns (start node, meters from the click to it, minutes left for the
     walk itself, {node: minutes}).
     """
-    check_rate_limit(f"{request.client.host if request.client else 'unknown'}:{kind}")
+    check_rate_limit(f"{client_ip(request)}:{kind}")
     graph = require_graph()
 
     clicked = Point(lng, lat)  # shapely uses (x, y) = (lng, lat)
@@ -375,7 +369,7 @@ def grid_cells(request: Request, response: Response):
     gaps and the best spot to fill each one (card 12). The site draws the
     heat map and gap finder from this. Browsers aren't asked to keep it, so
     a rebuilt grid shows up as soon as the server restarts."""
-    check_rate_limit(f"{request.client.host if request.client else 'unknown'}:grid")
+    check_rate_limit(f"{client_ip(request)}:grid")
     if grid is None:
         raise HTTPException(status_code=503, detail="The Manhattan grid isn't built yet. Run: python scripts/build_grid.py")
     response.headers["Cache-Control"] = "no-store"
