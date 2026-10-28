@@ -155,6 +155,29 @@ if allowed_origins:
     )
 
 
+# TEMPORARY: shows how Render's proxy passes on the visitor's address, so
+# the rate limit can key on one that can't be forged. Off unless the
+# SHOW_CLIENT_IP=1 setting is on. Remove once the rate limit is fixed.
+CLIENT_IP_HEADERS = [
+    "x-forwarded-for",
+    "cf-connecting-ip",
+    "true-client-ip",
+    "x-real-ip",
+    "forwarded",
+    "x-envoy-external-address",
+]
+
+
+@app.get("/api/debug/ip")
+def debug_ip(request: Request):
+    if os.environ.get("SHOW_CLIENT_IP") != "1":
+        raise HTTPException(status_code=404, detail="Not Found")
+    return {
+        "client_host_seen_by_app": request.client.host if request.client else None,
+        "headers": {h: request.headers.get(h) for h in CLIENT_IP_HEADERS},
+    }
+
+
 def require_graph():
     if walk_graph is None:
         raise HTTPException(
