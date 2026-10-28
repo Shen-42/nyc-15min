@@ -457,3 +457,250 @@
 .legend__ends > span:last-child {
   text-align: right;
 }
+
+/* ---- Accounts (card 13) ---- */
+
+.panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.message--ok {
+  background: var(--color-ok-bg);
+  color: var(--color-ok-ink);
+}
+
+/* One button style for the account screens, matching the panel's toggles. */
+.button {
+  min-height: var(--tap-target);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.button--primary {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-surface);
+}
+
+/* Set apart by color and position; only ever the second step's button
+   and the first step's entry point. */
+.button--danger {
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+  color: #fff;
+}
+
+.button--link {
+  padding: 0 var(--space-1);
+  border: 0;
+  background: transparent;
+  color: var(--color-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Save this spot */
+.save-spot {
+  align-self: flex-start;
+}
+
+.save-spot__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.save-spot__row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.save-spot__row .field__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.save-spot__done {
+  color: var(--color-ok-ink);
+  font-size: var(--text-sm);
+}
+
+/* Saved places list */
+.saved-list {
+  list-style: none;
+  padding: 0;
+}
+
+.saved-list__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.saved-list__go {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+/* Form fields: the label above, the error right below. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.field__label {
+  font-weight: 700;
+}
+
+.field__hint {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+.field__input {
+  min-height: var(--tap-target);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-muted);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font: inherit;
+  color: inherit;
+}
+
+.field__input[aria-invalid="true"] {
+  border-color: var(--color-error-ink);
+}
+
+.field__error {
+  color: var(--color-error-ink);
+  font-size: var(--text-sm);
+}
+
+/* Dialogs */
+.dialog {
+  width: min(28rem, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100dvh - 2 * var(--space-4));
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  box-shadow: 0 8px 32px rgb(31 36 48 / 0.3);
+}
+
+.dialog::backdrop {
+  background: rgb(31 36 48 / 0.45);
+}
+
+.dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6) 0;
+}
+
+.dialog__title {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.dialog__close {
+  min-height: var(--tap-target);
+  padding: 0 var(--space-3);
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6) var(--space-6);
+}
+
+.dialog__body > .button {
+  align-self: flex-start;
+}
+
+.dialog__links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* Account dialog sections */
+.account__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-line);
+}
+
+.account__section > .button {
+  align-self: flex-start;
+}
+
+.account__heading {
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.account__danger .account__heading {
+  color: var(--color-danger);
+}
+
+.account__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Admin usage table */
+.usage {
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage caption {
+  text-align: left;
+  padding-bottom: var(--space-1);
+}
+
+.usage th,
+.usage td {
+  padding: var(--space-1) var(--space-3) var(--space-1) 0;
+  text-align: right;
+}
+
+.usage th:first-child {
+  text-align: left;
+}
+
+.usage thead th {
+  border-bottom: 1px solid var(--color-line);
+}

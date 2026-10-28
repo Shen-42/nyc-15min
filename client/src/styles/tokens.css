@@ -15,6 +15,11 @@
   --color-warn-ink: #6b4e00;
   --color-error-bg: #fbe4e4;
   --color-error-ink: #8a1c1c;
+  --color-ok-bg: #e3f3e6;
+  --color-ok-ink: #1e5b2a;
+
+  /* Destructive actions (delete account). White on it is 7.6:1. */
+  --color-danger: #a4161a;
 
   /* The walking area is neutral so the place colors stand out on the map. */
   --color-walk: #1f2430;

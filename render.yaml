@@ -26,6 +26,20 @@ services:
           type: keyvalue
           name: nyc-15min-limits
           property: connectionString
+      # Accounts (card 13, see server/accounts.py). Set the values in the
+      # dashboard; the secret key must never reach the browser or GitHub.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: ADMIN_USER_IDS
+        sync: false
+      # A fine-grained GitHub token that can run this repo's Actions, for
+      # the admin's "Start data refresh" button.
+      - key: GH_REFRESH_TOKEN
+        sync: false
+      - key: GH_REPO
+        value: Shen-42/nyc-15min
 
   # Redis-compatible store for rate-limit counts. Free plan: in memory only,
   # which is fine because the counts only matter for a minute.
@@ -45,4 +59,9 @@ services:
         value: "22"
       # The API's address, e.g. https://nyc-15min-api.onrender.com
       - key: VITE_API_URL
+        sync: false
+      # Sign-in (card 13). The publishable key is public by design.
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
         sync: false

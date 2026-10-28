@@ -5,3 +5,4 @@ pytest>=8.0
 shapely>=2.0
 redis>=5.0
 opening-hours-py>=2.1
+pyjwt[crypto]>=2.10

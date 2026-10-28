@@ -51,6 +51,13 @@ Click any point in Manhattan to see everywhere you can walk in 15 minutes, which
     - **Score map** (under "Map view"): a smooth heat map of the score with your weights, colored with the viridis palette, which stays in order for color-blind viewers. The squares are data points, not drawn shapes: the browser (`client/src/data/gridImage.js`) sets each pixel to a weighted average of the nearby squares' scores, with weights falling off along a Gaussian curve (sigma 120 m), and divides by the total weight so the shore and small parks don't fade. The image is cut to Manhattan's shoreline, with lakes cut out. Parks have no score of their own, so they take the colors of the blocks around them: where the normal smoothing has no data, a wider one (sigma 500 m) takes over, which reaches the middle of Central Park without leaving holes. It's rebuilt in about 0.2 seconds when your weights change.
     - **Gap finder**: for one category, the areas with nothing of it within 15 minutes, drawn the same smooth way in the category's color (darker where more nearby squares are gaps), and the one square where a new place would cover the most gap squares, marked with a star. The spot is named by its nearest corner, using the street names in the curb ramp data, or else by the nearest named place. Manhattan has few true gaps. In the October 2026 data, of 4,720 squares outside parks: 15 have no grocery store in reach (11 of them on Roosevelt Island), 83 no subway station (the largest group, 27 squares, on the Lower East Side), 61 no pharmacy (38 in Inwood), and none lack a park.
 
+11. **Accounts (optional).** Searching never needs an account. Signing in, with email and password through [Supabase Auth](https://supabase.com/docs/guides/auth), lets you save places and keep your needs profile across devices.
+    - The browser only uses Supabase to sign in. Saves, loads, and deletes go through the API, which checks the sign-in token itself against Supabase's public keys (`server/auth.py`) and filters every query by the signed-in user (`server/store.py`).
+    - The two tables (`supabase/schema.sql`) have row-level security on with no policies, so the browser's public key can't read or write them; only the API's secret key can.
+    - Two roles. A **user** manages only their own saved places, profile, and account. An **admin**, listed by user id in the API's `ADMIN_USER_IDS` setting, also sees the last week's search counts and can start the monthly data refresh. The server checks the role on every admin request and answers 403 otherwise.
+    - Edge cases handled: a session that expires mid-visit is refreshed once, then signs out with a message; signing in before confirming the email offers to resend the link; signing up twice with the same email says the account exists; password reset by email; two tabs editing the same profile (each save names the version it started from, and an out-of-date save is refused with the latest profile, which the page then shows); deleting an account removes its saved places, profile, and sign-in.
+    - Free Supabase projects pause after a week without use, so a small GitHub Actions job (`keep-supabase-awake.yml`) queries the database twice a week.
+
 ## Stack
 
 | Part | Tools |
@@ -59,7 +66,8 @@ Click any point in Manhattan to see everywhere you can walk in 15 minutes, which
 | Back end | Python, FastAPI, Shapely, opening-hours-py |
 | Data | OpenStreetMap via OSMnx and the Overpass API; NYC Open Data for curb ramps |
 | Map tiles | Stadia Maps, OSM Bright style |
-| Hosting | Render: a static site, a web service for the API, and Key Value (Redis) for rate limits |
+| Accounts | Supabase Auth (email and password) and Postgres, through the API |
+| Hosting | Render: a static site, a web service for the API, and Key Value (Redis) for rate limits and usage counts |
 | Automation | GitHub Actions: monthly data refresh, then scoring the Manhattan grid |
 | Tests | pytest |
 
@@ -74,6 +82,7 @@ client/                    React site
   src/data/                categories, needs presets, New York time, heat map colors and image,
                            Manhattan boundary
   src/hooks.js             media query hook (phone or desktop layout)
+  src/account/             sign-in, account, and admin dialogs, saving places and profiles
   src/styles/              tokens, base, layout, panel, and map CSS
 server/                    FastAPI API
   main.py                  routes, caching, timing
@@ -85,9 +94,13 @@ server/                    FastAPI API
   hours.py                 whether a place is open at a given time
   modes.py                 walking and wheelchair speeds, curb ramp penalty
   grid.py                  the scored Manhattan grid, and ranking a spot against it
+  accounts.py              sign-in checks, saved places, profiles, roles, admin routes
+  auth.py, store.py        checking Supabase tokens; reading and writing the tables
+  usage.py                 daily request counts for the admin page
   scripts/                 downloads (graph, water, places, curb ramps), the grid, and the data check
   data/                    the downloaded data (committed)
   test_*.py                tests
+supabase/schema.sql        the account tables, to paste into Supabase's SQL editor
 render.yaml                Render setup for all three services
 .github/workflows/         monthly data refresh
 ```
@@ -124,6 +137,14 @@ npm run dev
 
 Open http://localhost:5173. In development, Vite forwards requests that start with `/api` to `localhost:8000` (see `client/vite.config.js`).
 
+**4. Accounts (optional).** Without these settings the site runs as before, with no sign-in.
+
+1. Create a free project at https://supabase.com. In its **SQL Editor**, run `supabase/schema.sql`.
+2. Under **Authentication > URL Configuration**, set the Site URL to the live site and add `http://localhost:5173/**` to the redirect URLs.
+3. Copy `client/.env.example` and `server/.env.example` to `client/.env.local` and `server/.env`, and fill in the project URL and keys from **Project Settings > API Keys**. Both files are ignored by git.
+4. Start the API with `uvicorn main:app --reload --port 8000 --env-file .env`.
+5. To make yourself an admin, sign up on the site, copy your user id from **Authentication > Users** into `ADMIN_USER_IDS`, and restart the API.
+
 ## API
 
 All routes take `lat`, `lng`, and optionally `minutes` (default 15, at most 30).
@@ -136,6 +157,11 @@ All routes take `lat`, `lng`, and optionally `minutes` (default 15, at most 30).
 | `GET /api/nearest-node` | The graph node closest to a point |
 | `GET /api/graph/info` | Node and segment counts |
 | `GET /api/health` | Whether the server is up and the graph is loaded |
+| `GET /api/me` | The signed-in user's id, email, and role |
+| `GET`, `POST /api/saved-places`; `DELETE /api/saved-places/{id}` | The signed-in user's saved places (at most 50) |
+| `GET`, `PUT /api/profile` | The signed-in user's needs profile; `PUT` names the version it started from and gets 409 if it's out of date |
+| `DELETE /api/account` | Deletes the signed-in user's account and data |
+| `GET /api/admin/usage`, `POST /api/admin/refresh` | Admins only: search counts for the last 7 days, and starting the data refresh |
 | `GET /api/grid` | Every 100 m square of Manhattan with its category scores, plus each category's gaps and best spot (no `lat`/`lng`) |
 
 `/api/places` and `/api/reachable` also take `weights`, for example `weights=grocery:3,park:3,school:0`. Each weight is a whole number from 0 to 3, and categories left out keep their defaults. An unknown category, a weight out of range, or all weights at 0 returns 422 with a message saying what to fix.
@@ -193,6 +219,7 @@ The tests cover:
 - ranking a spot against the grid with different weights
 - the API routes, including bad `weights`, `at`, and `mode` values
 - the rate limit, with a stand-in for Redis
+- accounts: missing, forged, expired, and wrong-project tokens; people only seeing and deleting their own places; the two-tab profile conflict; deleting an account; each admin route refused to users; and the exact requests sent to Supabase, with a fake server in place of it
 
 ## Deploy (Render, free plan)
 
@@ -207,7 +234,11 @@ Set these in each service's **Environment** page:
 | Service | Variable | Value |
 | --- | --- | --- |
 | nyc-15min-api | `ALLOWED_ORIGINS` | The site's address, e.g. `https://nyc-15min.onrender.com` |
+| nyc-15min-api | `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | From Supabase's **Project Settings > API Keys** (accounts) |
+| nyc-15min-api | `ADMIN_USER_IDS` | Comma-separated Supabase user ids |
+| nyc-15min-api | `GH_REFRESH_TOKEN` | A fine-grained GitHub token with Actions read and write on this repo |
 | nyc-15min | `VITE_API_URL` | The API's address, e.g. `https://nyc-15min-api.onrender.com` |
+| nyc-15min | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | From the same Supabase page; the publishable key is public by design |
 
 Vite builds `VITE_API_URL` into the site, so changing it needs a new deploy of the site. When a change touches both the API and the site, wait for the API to finish deploying before testing, since the site finishes first.
 
@@ -224,6 +255,9 @@ On the live site, Stadia Maps allows tiles by checking the site's domain, which 
 - The hour is a native slider, so arrow keys work, and screen readers read the hour as "9 pm".
 - Map markers carry meaning in shape and symbol, not only color: places with no listed hours get a "?" badge, corners without curb ramps are diamonds with "!", and the gap finder's best spot is a star.
 - The score map and gap finder are off until chosen under "Map view". While one is on, a box at the top of the panel names it, explains it in words (the legend labels the scale with numbers and both ends in words, and the gap finder names the best spot by its cross streets), and has a "Back to your walk" button. Clicking the map also goes back.
+
+- Account forms have visible labels, fill in from password managers (`autocomplete`), and show each error under its field, announced to screen readers. Dialogs use the native `<dialog>`, so focus stays inside and Escape closes them.
+- Deleting an account is set apart in red and takes a second step, where "Keep account" is the default and has the focus.
 
 Not yet supported: choosing a point by keyboard. An address search would fix that.
 

@@ -16,6 +16,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from shapely.geometry import Point
 from shapely.ops import unary_union
 
+import accounts
 from amenities import load_amenities, reachable_amenities
 from graph import WalkGraph
 from grid import Grid
@@ -23,6 +24,7 @@ from hours import parse_at, status_at
 from modes import NO_RAMP_PENALTY_MIN, SPEEDS, load_no_ramp_nodes, parse_mode
 from rate_limit import RateLimited, RateLimiter, make_counter
 from scoring import parse_weights, score_walk, settings_with_weights
+from usage import make_usage
 from walk_area import load_land, load_parks, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.json"
@@ -96,6 +98,7 @@ async def lifespan(app):
         print(f"Loaded walking graph: {len(walk_graph):,} nodes, {walk_graph.edge_count:,} edges")
     else:
         print(f"No walking graph at {GRAPH_FILE}. Run: python scripts/build_graph.py")
+    accounts.setup(usage, check_rate_limit)
     yield
 
 
@@ -121,9 +124,14 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # /api to this server, so no permission is needed there.
 allowed_origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 if allowed_origins:
-    # expose_headers lets the site read Retry-After from a 429.
+    # expose_headers lets the site read Retry-After from a 429. Accounts
+    # (card 13) add saves and deletes, sent with a sign-in token.
     app.add_middleware(
-        CORSMiddleware, allow_origins=allowed_origins, allow_methods=["GET"], expose_headers=["Retry-After"]
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_headers=["Authorization", "Content-Type"],
+        expose_headers=["Retry-After"],
     )
 
 
@@ -171,6 +179,8 @@ def nearest_node(
 # bandwidth. See rate_limit.py for where the counts are kept.
 SEARCHES_PER_MINUTE = 30
 rate_limiter = RateLimiter(SEARCHES_PER_MINUTE, make_counter())
+# Requests per route per day, for the admin page (card 13).
+usage = make_usage()
 
 
 def check_rate_limit(key):
@@ -248,6 +258,7 @@ def finish(response, path, timer):
     # Shows in the terminal (and Render's logs), and in Chrome under
     # DevTools > Network > the request > Timing.
     print(f"{path} {timer.summary()}")
+    usage.hit(path)
     response.headers["Server-Timing"] = timer.header()
 
 
@@ -395,3 +406,7 @@ class StepTimer:
 
     def header(self):
         return ", ".join(f"{name};dur={ms:.1f}" for name, ms in self.steps)
+
+
+# Accounts, saved places, needs profiles, and admin routes (card 13).
+app.include_router(accounts.router)

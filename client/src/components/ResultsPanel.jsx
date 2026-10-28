@@ -6,6 +6,8 @@ import LayerInfo from "./LayerInfo";
 import MapView from "./MapView";
 import NeedsProfile from "./NeedsProfile";
 import TimeOfDay from "./TimeOfDay";
+import SavedPlaces from "../account/SavedPlaces";
+import SaveSpot from "../account/SaveSpot";
 import { formatHour } from "../data/time";
 
 export default function ResultsPanel({
@@ -31,6 +33,14 @@ export default function ResultsPanel({
   gridError,
   gapCategory,
   onGapCategory,
+  selectedPoint,
+  account,
+  savedPlaces,
+  onSignIn,
+  onOpenAccount,
+  onPlaceSaved,
+  onGoToPlace,
+  onRemovePlace,
 }) {
   const loading = status === "loading";
   const categoryById = Object.fromEntries((result?.score.categories ?? []).map((c) => [c.category, c]));
@@ -62,7 +72,26 @@ export default function ResultsPanel({
       )}
       {/* What shows at "peek": the title and the score. Inert while hidden. */}
       <div ref={sheet.peekRef} className="panel__peek" inert={sheet.mobile && sheetPosition === "hidden"}>
-      <h1 className="panel__title">NYC 15-Minute City Explorer</h1>
+      <div className="panel__header">
+        <h1 className="panel__title">NYC 15-Minute City Explorer</h1>
+        {/* Signing in is optional: searching never needs an account (card 13). */}
+        {account.enabled &&
+          (account.session ? (
+            <button type="button" className="button button--link" onClick={onOpenAccount}>
+              Account
+            </button>
+          ) : (
+            <button type="button" className="button button--link" onClick={() => onSignIn()}>
+              Sign in
+            </button>
+          ))}
+      </div>
+
+      {account.notice && (
+        <p className={`message message--${account.notice.kind}`} role="status">
+          {account.notice.text}
+        </p>
+      )}
 
       {view !== "walk" && (
         <LayerInfo
@@ -132,6 +161,15 @@ export default function ResultsPanel({
               )}
             </p>
           </div>
+          {account.enabled && result && selectedPoint && (
+            <SaveSpot
+              key={selectedPoint.join(",")}
+              point={selectedPoint}
+              account={account}
+              onNeedSignIn={onSignIn}
+              onSaved={onPlaceSaved}
+            />
+          )}
         </div>
       )}
       </div>
@@ -144,6 +182,7 @@ export default function ResultsPanel({
         <TimeOfDay hour={hour} onChange={onHourChange} />
         <NeedsProfile weights={weights} onChange={onWeightsChange} mode={mode} onModeChange={onModeChange} />
         <MapView view={view} onChange={onViewChange} />
+        {account.session && <SavedPlaces places={savedPlaces} onGo={onGoToPlace} onRemove={onRemovePlace} />}
       </div>
 
       {result && (

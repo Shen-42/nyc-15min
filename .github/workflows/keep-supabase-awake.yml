@@ -1,0 +1,30 @@
+# Free Supabase projects pause after 7 days without use, which would break
+# sign-in on the live site (card 13). This asks the database one tiny
+# question twice a week so it never sits idle that long.
+# Needs two repo secrets: SUPABASE_URL and SUPABASE_SECRET_KEY.
+name: Keep Supabase awake
+
+on:
+  schedule:
+    - cron: "17 9 * * 1,4" # Mondays and Thursdays, 09:17 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Query the database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SECRET_KEY" ]; then
+            echo "Set the SUPABASE_URL and SUPABASE_SECRET_KEY repo secrets." && exit 1
+          fi
+          curl --fail --silent --show-error --output /dev/null \
+            -H "apikey: $SUPABASE_SECRET_KEY" \
+            "$SUPABASE_URL/rest/v1/profiles?select=user_id&limit=1"
+          echo "Supabase answered." | tee -a "$GITHUB_STEP_SUMMARY"

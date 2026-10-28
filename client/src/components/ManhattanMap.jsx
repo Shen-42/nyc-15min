@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import {
   AttributionControl,
   CircleMarker,
@@ -8,6 +8,7 @@ import {
   Polygon,
   TileLayer,
   Tooltip,
+  useMap,
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
@@ -54,6 +55,16 @@ const STAR_ICON = L.divIcon({
   iconAnchor: [15, 15],
 });
 
+// Moves the map to a point, e.g. a saved place (card 13). key changes on
+// every request, so picking the same place twice still moves the map.
+function FlyTo({ target }) {
+  const map = useMap();
+  useEffect(() => {
+    if (target) map.flyTo(target.point, Math.max(map.getZoom(), 15), { duration: 0.6 });
+  }, [map, target]);
+  return null;
+}
+
 // react-leaflet hook: runs our function whenever the map is clicked.
 function ClickHandler({ onMapClick }) {
   useMapEvents({
@@ -75,6 +86,7 @@ export default function ManhattanMap({
   grid = null,
   weights,
   gapCategory,
+  flyTo = null,
   onMapClick,
 }) {
   // What the score map or gap finder draws (card 12): a value for each grid
@@ -168,6 +180,7 @@ export default function ManhattanMap({
         <CircleMarker center={selectedPoint} radius={8} className="start-point" interactive={false} />
       )}
 
+      <FlyTo target={flyTo} />
       <ClickHandler onMapClick={onMapClick} />
     </MapContainer>
   );

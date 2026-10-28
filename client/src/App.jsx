@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { SLOW_REQUEST_MS, apiFetch } from "./api";
+import AccountDialog from "./account/AccountDialog";
+import AuthDialog from "./account/AuthDialog";
+import { useAccount } from "./account/useAccount";
+import { useAccountData } from "./account/useAccountData";
 import ManhattanMap from "./components/ManhattanMap";
 import ResultsPanel from "./components/ResultsPanel";
 import { isInManhattan } from "./data/manhattan";
@@ -40,6 +44,15 @@ export default function App() {
   // The Manhattan grid, loaded the first time the score map or gap finder opens.
   const [grid, setGrid] = useState(null);
   const [gridError, setGridError] = useState(null);
+  // Accounts (card 13): who is signed in, their saved places, and which
+  // dialog is open. authReason says why sign-in was asked for, or is null.
+  const account = useAccount();
+  const saved = useAccountData({ account, weights, mode, setWeights, setMode });
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authReason, setAuthReason] = useState(null);
+  const [accountOpen, setAccountOpen] = useState(false);
+  // Where the map should move to, e.g. when a saved place is picked.
+  const [flyTo, setFlyTo] = useState(null);
   // Counts requests so a slow old response can't replace a newer one.
   const latestRequest = useRef(0);
   // The same for re-scores after the needs form changes.
@@ -207,6 +220,18 @@ export default function App() {
     }
   }
 
+  function openSignIn(reason = null) {
+    account.setNotice(null);
+    setAuthReason(reason);
+    setAuthOpen(true);
+  }
+
+  function goToPlace(place) {
+    const point = [place.lat, place.lng];
+    setFlyTo({ point, key: Date.now() });
+    handleMapClick(point);
+  }
+
   function handleMapClick(point) {
     setFocus(null);
     setView("walk"); // a click asks about one spot, so go back to your walk
@@ -249,7 +274,36 @@ export default function App() {
         gridError={gridError}
         gapCategory={gapCategory}
         onGapCategory={setGapCategory}
+        selectedPoint={selectedPoint}
+        account={account}
+        savedPlaces={saved.places}
+        onSignIn={openSignIn}
+        onOpenAccount={() => setAccountOpen(true)}
+        onPlaceSaved={saved.addPlace}
+        onGoToPlace={goToPlace}
+        onRemovePlace={saved.removePlace}
       />
+      {account.enabled && (
+        <>
+          <AuthDialog
+            open={authOpen || account.recovering}
+            onClose={() => {
+              setAuthOpen(false);
+              account.endRecovery();
+            }}
+            reason={authReason}
+            recovering={account.recovering}
+            onRecovered={() => account.setNotice({ kind: "ok", text: "Password updated. You're signed in." })}
+          />
+          <AccountDialog
+            open={accountOpen}
+            onClose={() => setAccountOpen(false)}
+            account={account}
+            savedCount={saved.places.length}
+            onDeleted={() => account.setNotice({ kind: "ok", text: "Your account and its data were deleted." })}
+          />
+        </>
+      )}
       <div className="map-wrap" data-focus={focus ?? undefined}>
         <ManhattanMap
           selectedPoint={selectedPoint}
@@ -262,6 +316,7 @@ export default function App() {
           grid={grid}
           weights={weights}
           gapCategory={gapCategory}
+          flyTo={flyTo}
           onMapClick={handleMapClick}
         />
       </div>
