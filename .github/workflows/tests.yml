@@ -62,7 +62,7 @@ jobs:
     steps:
       - name: Read what the update changes
         id: meta
-        uses: dependabot/fetch-metadata@v2
+        uses: dependabot/fetch-metadata@v3
 
       # Only updates Dependabot says are minor or patch. If it can't tell
       # (it sometimes can't for ">=" requirements), a person decides.
