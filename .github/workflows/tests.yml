@@ -64,24 +64,40 @@ jobs:
         id: meta
         uses: dependabot/fetch-metadata@v3
 
-      # Only updates Dependabot says are minor or patch. If it can't tell
-      # (it sometimes can't for ">=" requirements), a person decides.
-      - name: Merge minor and patch updates
-        if: steps.meta.outputs.update-type == 'version-update:semver-minor' || steps.meta.outputs.update-type == 'version-update:semver-patch'
+      - name: Merge minor and patch updates, leave majors for a person
+        env:
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+          NAMES: ${{ steps.meta.outputs.dependency-names }}
+          TITLE: ${{ github.event.pull_request.title }}
         run: |
+          # For ">=" requirements Dependabot often can't say how big the
+          # update is. Then read it from the PR title instead: in
+          # "from >=0.27 to >=0.28.1" the first number stays the same, so
+          # it's a minor or patch update; "from >=8.0 to >=9.1.1" is major.
+          if [ -z "$UPDATE_TYPE" ]; then
+            from=$(printf '%s' "$TITLE" | sed -nE 's/.* from [^0-9]*([0-9]+).* to .*/\1/p')
+            to=$(printf '%s' "$TITLE" | sed -nE 's/.* to [^0-9]*([0-9]+).*/\1/p')
+            if [ -n "$from" ] && [ "$from" = "$to" ]; then
+              UPDATE_TYPE="version-update:semver-minor"
+            fi
+          fi
+
+          case "$UPDATE_TYPE" in
+            version-update:semver-minor|version-update:semver-patch) ;;
+            *)
+              gh pr comment "$PR_URL" --body "Tests pass, but this update ($NAMES) is a major version or its size is unclear, so it wasn't merged automatically. Check the release notes, try the site with it if it touches the site, then merge or close."
+              exit 0
+              ;;
+          esac
+
           # Several updates often pass at the same moment; GitHub refuses
           # all but the first ("Base branch was modified"). Wait and retry.
           for attempt in 1 2 3 4 5; do
             if gh pr merge --squash --delete-branch "$PR_URL"; then
-              echo "Merged: ${{ steps.meta.outputs.dependency-names }}" >> "$GITHUB_STEP_SUMMARY"
+              echo "Merged: $NAMES" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
             echo "Merge attempt $attempt didn't go through; trying again shortly."
             sleep $((attempt * 20))
           done
           exit 1
-
-      - name: Leave major or unclear updates for a person
-        if: steps.meta.outputs.update-type != 'version-update:semver-minor' && steps.meta.outputs.update-type != 'version-update:semver-patch'
-        run: |
-          gh pr comment "$PR_URL" --body "Tests pass, but this update (${{ steps.meta.outputs.dependency-names }}) is a major version or Dependabot couldn't tell, so it wasn't merged automatically. Check the release notes, try the site with it if it touches the site, then merge or close."
