@@ -18,6 +18,11 @@ updates:
     schedule:
       interval: weekly
     groups:
+      # Vite and its plugins must move together (plugin-react 6 needs Vite 8),
+      # so they share one PR whatever the size of the update. A group listed
+      # first takes the packages it matches.
+      vite:
+        patterns: ["vite", "@vitejs/*", "vitest", "@vitest/*"]
       npm-minor-and-patch:
         update-types: ["minor", "patch"]
   - package-ecosystem: github-actions

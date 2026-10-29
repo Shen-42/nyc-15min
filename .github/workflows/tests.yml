@@ -64,13 +64,24 @@ jobs:
         id: meta
         uses: dependabot/fetch-metadata@v2
 
+      # Only updates Dependabot says are minor or patch. If it can't tell
+      # (it sometimes can't for ">=" requirements), a person decides.
       - name: Merge minor and patch updates
-        if: steps.meta.outputs.update-type != 'version-update:semver-major'
+        if: steps.meta.outputs.update-type == 'version-update:semver-minor' || steps.meta.outputs.update-type == 'version-update:semver-patch'
         run: |
-          gh pr merge --squash --delete-branch "$PR_URL"
-          echo "Merged: ${{ steps.meta.outputs.dependency-names }}" >> "$GITHUB_STEP_SUMMARY"
+          # Several updates often pass at the same moment; GitHub refuses
+          # all but the first ("Base branch was modified"). Wait and retry.
+          for attempt in 1 2 3 4 5; do
+            if gh pr merge --squash --delete-branch "$PR_URL"; then
+              echo "Merged: ${{ steps.meta.outputs.dependency-names }}" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "Merge attempt $attempt didn't go through; trying again shortly."
+            sleep $((attempt * 20))
+          done
+          exit 1
 
-      - name: Leave major updates for a person
-        if: steps.meta.outputs.update-type == 'version-update:semver-major'
+      - name: Leave major or unclear updates for a person
+        if: steps.meta.outputs.update-type != 'version-update:semver-minor' && steps.meta.outputs.update-type != 'version-update:semver-patch'
         run: |
-          gh pr comment "$PR_URL" --body "Tests pass, but this is a major update (${{ steps.meta.outputs.dependency-names }}), so it wasn't merged automatically. Check the release notes, try the site with it locally, then merge or close."
+          gh pr comment "$PR_URL" --body "Tests pass, but this update (${{ steps.meta.outputs.dependency-names }}) is a major version or Dependabot couldn't tell, so it wasn't merged automatically. Check the release notes, try the site with it if it touches the site, then merge or close."
