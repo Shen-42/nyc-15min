@@ -27,7 +27,7 @@ jobs:
       # in server/scripts/overpass.py.
       OVERPASS_URLS: ${{ secrets.OVERPASS_URLS }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v6
         with:
