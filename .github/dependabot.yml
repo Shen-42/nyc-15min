@@ -1,6 +1,9 @@
-# Dependabot opens a pull request when a dependency has a security fix or a
-# new version: Python packages, npm packages, and the GitHub Actions used by
-# the workflows. Weekly, grouped, so it's one PR per ecosystem.
+# Dependabot opens pull requests for outdated or vulnerable dependencies:
+# Python packages, npm packages, and the GitHub Actions the workflows use.
+# Weekly. Minor and patch updates are grouped into one PR per ecosystem and
+# merge themselves once the tests pass (tests.yml). Each major update gets
+# its own PR and waits for a person, since a breaking change can pass the
+# tests and still break the site.
 version: 2
 updates:
   - package-ecosystem: pip
@@ -8,19 +11,19 @@ updates:
     schedule:
       interval: weekly
     groups:
-      python:
-        patterns: ["*"]
+      python-minor-and-patch:
+        update-types: ["minor", "patch"]
   - package-ecosystem: npm
     directory: /client
     schedule:
       interval: weekly
     groups:
-      npm:
-        patterns: ["*"]
+      npm-minor-and-patch:
+        update-types: ["minor", "patch"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     groups:
-      actions:
-        patterns: ["*"]
+      actions-minor-and-patch:
+        update-types: ["minor", "patch"]

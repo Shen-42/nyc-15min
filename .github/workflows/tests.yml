@@ -1,0 +1,76 @@
+# Runs every test, and builds the site, on each pull request and each push
+# to main, so every PR shows a check mark or a cross.
+# For Dependabot's PRs it then goes one step further (the automerge job):
+# minor and patch updates that pass are merged, which makes Render deploy
+# them; major updates get a comment and wait for a person.
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: server/requirements*.txt
+      - run: pip install -r requirements.txt
+      - run: pytest
+
+  client:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  automerge:
+    # Only Dependabot's PRs, and only after both test jobs passed.
+    needs: [server, client]
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      PR_URL: ${{ github.event.pull_request.html_url }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Read what the update changes
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+
+      - name: Merge minor and patch updates
+        if: steps.meta.outputs.update-type != 'version-update:semver-major'
+        run: |
+          gh pr merge --squash --delete-branch "$PR_URL"
+          echo "Merged: ${{ steps.meta.outputs.dependency-names }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Leave major updates for a person
+        if: steps.meta.outputs.update-type == 'version-update:semver-major'
+        run: |
+          gh pr comment "$PR_URL" --body "Tests pass, but this is a major update (${{ steps.meta.outputs.dependency-names }}), so it wasn't merged automatically. Check the release notes, try the site with it locally, then merge or close."
