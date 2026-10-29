@@ -58,6 +58,12 @@ Click any point in Manhattan to see everywhere you can walk in 15 minutes, which
     - Edge cases handled: a session that expires mid-visit is refreshed once, then signs out with a message; signing in before confirming the email offers to resend the link; signing up twice with the same email says the account exists; password reset by email; two tabs editing the same profile (each save names the version it started from, and an out-of-date save is refused with the latest profile, which the page then shows); deleting an account removes its saved places, profile, and sign-in.
     - Free Supabase projects pause after a week without use, so a small GitHub Actions job (`keep-supabase-awake.yml`) queries the database twice a week.
 
+12. **When things go wrong.** Every message appears in one place under the title, in one style, saying what happened and what to do next. Errors that a second try might fix (no connection, a timeout, a server error) come with a **Try again** button, and keyboard focus moves to it; refusals such as a click in a park or too many searches don't, since trying again wouldn't help.
+    - Requests give up after 70 seconds, longer than the free API takes to wake up, instead of spinning forever.
+    - The shaded area, the slowest request, is tried a second time before the panel says it couldn't be drawn; the score and places still show.
+    - A crash in the map or the panel shows a message and a **Reload the page** button in its place, instead of a blank page; the other part keeps working.
+    - On the server, any error a route doesn't handle is logged with the request that caused it and answered with a plain message and a short request id (also in the `X-Request-ID` header of every response), so a visitor's report can be matched to the log. FastAPI's own input errors come back as one readable sentence.
+
 ## Stack
 
 | Part | Tools |
@@ -209,7 +215,14 @@ source .venv/bin/activate
 pytest
 ```
 
-The tests cover:
+For the site:
+
+```bash
+cd client
+npm test
+```
+
+The server tests cover:
 
 - Dijkstra on small made-up graphs, including the slower wheelchair speed and the extra minutes at corners without ramps
 - the grid index, checked against testing every node
@@ -220,6 +233,9 @@ The tests cover:
 - the API routes, including bad `weights`, `at`, and `mode` values
 - the rate limit, with a stand-in for Redis
 - accounts: missing, forged, expired, and wrong-project tokens; people only seeing and deleting their own places; the two-tab profile conflict; deleting an account; each admin route refused to users; and the exact requests sent to Supabase, with a fake server in place of it
+- unexpected errors: a crashing route answers with a plain message and a request id, keeps its security headers, and leaks nothing; bad input comes back as one sentence
+
+The site tests (Vitest, with jsdom standing in for the browser) cover the 70-second timeout, retrying the shaded area once, readable messages for every kind of failure, the **Try again** button and its focus, and the crash screens.
 
 ## Deploy (Render, free plan)
 

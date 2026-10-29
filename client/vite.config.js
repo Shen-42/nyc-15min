@@ -11,4 +11,8 @@ export default defineConfig({
       "/api": "http://localhost:8000",
     },
   },
+  // Tests (npm test) run in Node with jsdom standing in for the browser.
+  test: {
+    environment: "jsdom",
+  },
 });

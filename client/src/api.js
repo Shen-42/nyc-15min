@@ -4,8 +4,17 @@
 // for example https://nyc-15min-api.onrender.com
 const API_URL = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
-export function apiFetch(path, options) {
-  return fetch(`${API_URL}${path}`, options);
+// Give up on a request after this long (card 14). Longer than the API
+// takes to wake up on Render's free plan (about a minute), so a slow start
+// still gets through, but a hung request doesn't spin forever.
+export const REQUEST_TIMEOUT_MS = 70_000;
+
+// fetch() with a timeout. When time runs out the promise rejects with a
+// TimeoutError, which errors.js turns into a readable message.
+export function apiFetch(path, options = {}) {
+  const { timeoutMs = REQUEST_TIMEOUT_MS, ...init } = options;
+  const signal = init.signal ?? AbortSignal.timeout(timeoutMs);
+  return fetch(`${API_URL}${path}`, { ...init, signal });
 }
 
 // Render's free plan puts the API to sleep after 15 minutes without visits,

@@ -183,3 +183,37 @@ def test_security_headers():
     res = client.get("/api/health")
     assert res.headers["x-content-type-options"] == "nosniff"
     assert "frame-ancestors 'none'" in res.headers["content-security-policy"]
+
+
+# ---- Error handling (card 14) ----
+
+
+def test_unexpected_errors_get_a_plain_message_and_an_id():
+    if not any(getattr(r, "path", None) == "/api/test-crash" for r in app.routes):
+
+        @app.get("/api/test-crash")
+        def crash():
+            raise RuntimeError("boom")
+
+    res = client.get("/api/test-crash")
+    assert res.status_code == 500
+    body = res.json()
+    assert body["detail"] == "Something went wrong on our side. Try again in a minute."
+    assert "boom" not in res.text  # no internals leak to the visitor
+    assert body["request_id"] == res.headers["x-request-id"]
+    assert res.headers["x-content-type-options"] == "nosniff"  # still gets security headers
+
+
+def test_every_response_has_a_request_id():
+    assert len(client.get("/api/health").headers["x-request-id"]) == 8
+
+
+def test_fastapi_input_errors_are_one_readable_sentence():
+    res = client.get("/api/places", params={"lat": "abc", "lng": -73.98})
+    assert res.status_code == 422
+    detail = res.json()["detail"]
+    assert isinstance(detail, str) and detail.startswith("Invalid lat:")
+    assert res.json()["errors"][0]["loc"] == ["query", "lat"]
+
+    missing = client.get("/api/places", params={"lng": -73.98})
+    assert missing.json()["detail"].startswith("Invalid lat:")

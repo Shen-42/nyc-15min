@@ -77,3 +77,10 @@
     touch-action: auto;
   }
 }
+
+/* The whole-page crash screen (card 14): centered, full height. */
+.crash--page {
+  min-height: 100dvh;
+  max-width: 32rem;
+  margin: 0 auto;
+}

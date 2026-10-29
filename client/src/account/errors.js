@@ -1,11 +1,5 @@
-// Readable text for an error response. FastAPI's own validation errors come
-// back as a list, which would otherwise show as [object Object].
-export async function errorText(res, fallback) {
-  const body = await res.json().catch(() => ({}));
-  if (typeof body.detail === "string") return body.detail;
-  if (Array.isArray(body.detail) && body.detail[0]?.msg) return body.detail[0].msg;
-  return fallback ?? `Something went wrong (error ${res.status}). Try again.`;
-}
+// Shared with the rest of the site (src/errors.js).
+export { errorText } from "../errors";
 
 // Supabase Auth's messages, in the site's words.
 export function authMessage(error) {

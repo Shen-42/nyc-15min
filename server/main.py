@@ -4,13 +4,18 @@ Run from this folder with:
     uvicorn main:app --reload --port 8000
 """
 
+import logging
 import os
 import time
+import traceback
+import uuid
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from shapely.geometry import Point
@@ -117,6 +122,55 @@ app = FastAPI(
 
 # Compress responses over 1 KB. A search result shrinks to about a quarter.
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Unexpected errors (card 14). Any exception a route doesn't handle is caught
+# here, logged with the request that caused it, and answered with a plain
+# message and a short request id, instead of a bare "Internal Server Error".
+# The id is also in the X-Request-ID header of every response, so a
+# visitor's report can be matched to the log line.
+# This is registered before the CORS middleware, so it sits inside it: a
+# crash still gets CORS headers, and the browser can read the message
+# instead of reporting a cross-origin error.
+log = logging.getLogger("nyc15min")
+UNEXPECTED_ERROR = "Something went wrong on our side. Try again in a minute."
+
+
+@app.middleware("http")
+async def catch_unexpected_errors(request, call_next):
+    request_id = uuid.uuid4().hex[:8]
+    try:
+        response = await call_next(request)
+    except Exception:
+        log.error(
+            "Unexpected error %s on %s %s?%s\n%s",
+            request_id,
+            request.method,
+            request.url.path,
+            request.url.query,
+            traceback.format_exc(),
+        )
+        response = JSONResponse(status_code=500, content={"detail": UNEXPECTED_ERROR, "request_id": request_id})
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
+@app.exception_handler(RequestValidationError)
+async def readable_validation_error(request, err):
+    """FastAPI's own input checks (a missing lat, a word where a number
+    belongs) answer with a list of objects, which a page can't show as is.
+    Answer with one sentence instead, keeping the list for programs."""
+    errors = err.errors()
+    first = errors[0] if errors else {}
+    field = next((str(part) for part in reversed(first.get("loc", [])) if not isinstance(part, int)), "input")
+    message = first.get("msg", "is not valid").rstrip(".")
+    detail = f"Invalid {field}: {message[0].lower() + message[1:] if message else 'not valid'}."
+    return JSONResponse(status_code=422, content={"detail": detail, "errors": jsonable(errors)})
+
+
+def jsonable(errors):
+    """Validation errors can hold exception objects; keep only plain fields."""
+    return [{k: e.get(k) for k in ("loc", "msg", "type")} for e in errors]
+
 
 # Security headers on every API response. The API only returns JSON, so it
 # may not be framed or treated as a page, and browsers shouldn't guess types.

@@ -9,9 +9,13 @@ import "./styles/layout.css";
 import "./styles/panel.css";
 import "./styles/map.css";
 import App from "./App.jsx";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <App />
+    {/* A last safety net: a crash anywhere shows a message, not a blank page. */}
+    <ErrorBoundary name="app" className="crash--page">
+      <App />
+    </ErrorBoundary>
   </StrictMode>
 );

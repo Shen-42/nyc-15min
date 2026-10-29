@@ -3,6 +3,7 @@ import { CATEGORIES, verdict } from "../data/categories";
 import { useMediaQuery } from "../hooks";
 import CategoryRow from "./CategoryRow";
 import LayerInfo from "./LayerInfo";
+import Message from "./Message";
 import MapView from "./MapView";
 import NeedsProfile from "./NeedsProfile";
 import TimeOfDay from "./TimeOfDay";
@@ -15,6 +16,7 @@ export default function ResultsPanel({
   result,
   message,
   serverDown,
+  onRetryHealth,
   waking,
   focus,
   onFocus,
@@ -87,11 +89,16 @@ export default function ResultsPanel({
           ))}
       </div>
 
-      {account.notice && (
-        <p className={`message message--${account.notice.kind}`} role="status">
-          {account.notice.text}
-        </p>
-      )}
+      {/* Every message goes here, in one style (card 14). */}
+      <div className="messages">
+        {serverDown && (
+          <Message kind="error" text="Can't reach the server. It may be starting up." onRetry={onRetryHealth} />
+        )}
+        {waking && !serverDown && <Message kind="warn" text="Waking up the server…" />}
+        {account.notice && <Message kind={account.notice.kind} text={account.notice.text} />}
+        {view !== "walk" && gridError && <Message kind="error" text={gridError.text} onRetry={gridError.retry} />}
+        {message && <Message kind={message.kind} text={message.text} onRetry={message.retry} />}
+      </div>
 
       {view !== "walk" && (
         <LayerInfo
@@ -104,17 +111,6 @@ export default function ResultsPanel({
         />
       )}
 
-      {serverDown && (
-        <p className="message message--error" role="alert">
-          Can't reach the server. Try reloading the page in a minute.
-        </p>
-      )}
-
-      {waking && !serverDown && (
-        <p className="message message--warn" role="status">
-          Waking up the server…
-        </p>
-      )}
 
       {/* Screen readers announce changes in this region (search started, finished, failed). */}
       <div role="status" aria-live="polite">
@@ -122,7 +118,6 @@ export default function ResultsPanel({
           <p className="panel__intro">Choose a spot in Manhattan to see what's within a 15-minute walk.</p>
         )}
         {!result && loading && <p className="panel__intro">Finding everything within a 15-minute walk…</p>}
-        {message && <p className={`message message--${message.kind}`}>{message.text}</p>}
         {result && (
           <p className="visually-hidden">
             Score {result.score.score} out of 100. {verdict(result.score.score)}

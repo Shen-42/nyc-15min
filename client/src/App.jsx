@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { SLOW_REQUEST_MS, apiFetch } from "./api";
+import { fetchArea } from "./area";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { errorText, failureText, worthRetrying } from "./errors";
 import AccountDialog from "./account/AccountDialog";
 import AuthDialog from "./account/AuthDialog";
 import { useAccount } from "./account/useAccount";
@@ -22,7 +25,8 @@ export default function App() {
   const [status, setStatus] = useState("idle");
   // The last successful search. Kept on screen while a new one loads.
   const [result, setResult] = useState(null);
-  // { kind: "warn" | "error", text } or null
+  // { kind: "warn" | "error", text, retry? } or null. With retry, the
+  // message shows a "Try again" button that calls it (card 14).
   const [message, setMessage] = useState(null);
   // The category whose places are highlighted on the map, or null.
   const [focus, setFocus] = useState(null);
@@ -44,6 +48,8 @@ export default function App() {
   // The Manhattan grid, loaded the first time the score map or gap finder opens.
   const [grid, setGrid] = useState(null);
   const [gridError, setGridError] = useState(null);
+  // Bumped by "Try again" to load the grid again after a failure.
+  const [gridAttempt, setGridAttempt] = useState(0);
   // Accounts (card 13): who is signed in, their saved places, and which
   // dialog is open. authReason says why sign-in was asked for, or is null.
   const account = useAccount();
@@ -64,8 +70,9 @@ export default function App() {
   const pointRef = useRef(null);
 
   // Wake the server as soon as the page opens, so it's likely ready by the
-  // time someone picks a spot.
-  useEffect(() => {
+  // time someone picks a spot. Run again by "Try again" if it failed.
+  function checkHealth() {
+    setServerDown(false);
     const slow = setTimeout(() => setWaking(true), SLOW_REQUEST_MS);
     apiFetch("/api/health")
       .then((res) => setServerDown(!res.ok))
@@ -74,7 +81,9 @@ export default function App() {
         clearTimeout(slow);
         setWaking(false);
       });
-  }, []);
+  }
+
+  useEffect(checkHealth, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When the needs form changes: remember it, and re-score the current spot.
   // Only the score and places are asked for again; the shaded area doesn't
@@ -96,10 +105,12 @@ export default function App() {
     // "no-store": always ask the server, so a rebuilt grid is never hidden
     // behind an old copy in the browser's cache.
     apiFetch("/api/grid", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
-      .then(setGrid)
-      .catch(() => setGridError("Couldn't load map data. Try again in a minute."));
-  }, [view, grid]);
+      .then(async (res) => {
+        if (res.ok) return setGrid(await res.json());
+        setGridError({ text: await errorText(res, "Couldn't load the map data.") });
+      })
+      .catch((err) => setGridError({ text: failureText(err) }));
+  }, [view, grid, gridAttempt]);
 
   // A new way of getting around changes the shaded area too, so search again in full.
   useEffect(() => {
@@ -130,9 +141,9 @@ export default function App() {
       const res = await apiFetch(`/api/places?${placesQuery(point)}`);
       if (!current()) return;
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        const text = typeof body.detail === "string" ? body.detail : `Couldn't update the score (error ${res.status}).`;
-        setMessage({ kind: "warn", text });
+        const text = await errorText(res, `Couldn't update the score (error ${res.status}).`);
+        const retry = worthRetrying(res.status) ? rescore : undefined;
+        setMessage({ kind: retry ? "error" : "warn", text, retry });
         return;
       }
       const data = await res.json();
@@ -141,8 +152,8 @@ export default function App() {
       setResult((r) =>
         r?.id === searchId ? { ...r, places: data.amenities, score: data.score, barriers: data.barriers ?? [] } : r
       );
-    } catch {
-      if (current()) setServerDown(true);
+    } catch (err) {
+      if (current()) setMessage({ kind: "error", text: failureText(err), retry: rescore });
     } finally {
       if (current()) setStatus("done");
     }
@@ -161,24 +172,23 @@ export default function App() {
 
     // Two requests at once: the places and score come back quickly, and the
     // shaded area (slow to build on the free server) is drawn when it lands.
-    const areaRequest = apiFetch(`/api/area?${query}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .catch(() => null);
+    // fetchArea tries the area twice before giving up (card 14).
+    const areaRequest = fetchArea(query).then(
+      (data) => ({ data }),
+      () => ({ failed: true })
+    );
 
     try {
       const res = await apiFetch(`/api/places?${placesQuery(point)}`);
       if (requestId !== latestRequest.current) return;
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        // 422: the server turned the click away (water, no path nearby) and says why.
-        // 429: too many searches in a minute.
-        // 501: the search function isn't written yet.
-        const explained = [422, 429, 501].includes(res.status);
-        const text = explained
-          ? body.detail
-          : `The search failed (${body.detail ?? `error ${res.status}`}). Try another spot.`;
+        // 422: the server turned the click away (water, a park, no path
+        // nearby) and says why. 429: too many searches in a minute. Those
+        // won't change by trying again; a server error might.
+        const text = await errorText(res);
+        const retry = worthRetrying(res.status) ? () => findWalkingArea(point) : undefined;
         setResult(null);
-        setMessage({ kind: res.status === 422 || res.status === 429 ? "warn" : "error", text });
+        setMessage({ kind: retry ? "error" : "warn", text, retry });
         setStatus("done");
         return;
       }
@@ -196,10 +206,11 @@ export default function App() {
       });
       setServerDown(false);
       setStatus("done");
-    } catch {
+    } catch (err) {
       if (requestId !== latestRequest.current) return;
-      // fetch() throws when the server can't be reached at all.
-      setServerDown(true);
+      // fetch() throws when the server can't be reached at all, or when the
+      // request timed out.
+      setMessage({ kind: "error", text: failureText(err), retry: () => findWalkingArea(point) });
       setStatus("done");
       return;
     } finally {
@@ -207,17 +218,33 @@ export default function App() {
       if (requestId === latestRequest.current) setWaking(false);
     }
 
-    try {
-      const areaData = await areaRequest;
-      if (requestId !== latestRequest.current || !areaData) return;
-      setResult((current) =>
-        current?.id === requestId
-          ? { ...current, area: { type: "Feature", properties: {}, geometry: areaData.area } }
-          : current
-      );
-    } catch {
-      // The panel already has its results; a missing shading isn't worth an error.
+    showArea(requestId, query, await areaRequest);
+  }
+
+  // Draws the shaded area when it arrives, or says it couldn't be drawn.
+  // The score and places are already showing, so this is only a warning.
+  function showArea(requestId, query, { data, failed }) {
+    if (requestId !== latestRequest.current) return;
+    if (failed) {
+      setMessage({
+        kind: "warn",
+        text: "The shaded area couldn't be drawn. The score and places are still correct.",
+        retry: () => {
+          setMessage(null);
+          fetchArea(query).then(
+            (again) => showArea(requestId, query, { data: again }),
+            () => showArea(requestId, query, { failed: true })
+          );
+        },
+      });
+      return;
     }
+    if (!data) return;
+    setResult((current) =>
+      current?.id === requestId
+        ? { ...current, area: { type: "Feature", properties: {}, geometry: data.area } }
+        : current
+    );
   }
 
   function openSignIn(reason = null) {
@@ -251,11 +278,13 @@ export default function App() {
 
   return (
     <div className="app">
+      <ErrorBoundary name="panel" className="panel">
       <ResultsPanel
         status={status}
         result={result}
         message={message}
         serverDown={serverDown}
+        onRetryHealth={checkHealth}
         waking={waking}
         focus={focus}
         onFocus={setFocus}
@@ -271,7 +300,7 @@ export default function App() {
         view={view}
         onViewChange={setView}
         grid={grid}
-        gridError={gridError}
+        gridError={gridError && { ...gridError, retry: () => setGridAttempt((n) => n + 1) }}
         gapCategory={gapCategory}
         onGapCategory={setGapCategory}
         selectedPoint={selectedPoint}
@@ -283,6 +312,7 @@ export default function App() {
         onGoToPlace={goToPlace}
         onRemovePlace={saved.removePlace}
       />
+      </ErrorBoundary>
       {account.enabled && (
         <>
           <AuthDialog
@@ -305,6 +335,7 @@ export default function App() {
         </>
       )}
       <div className="map-wrap" data-focus={focus ?? undefined}>
+        <ErrorBoundary name="map">
         <ManhattanMap
           selectedPoint={selectedPoint}
           area={result?.area}
@@ -319,6 +350,7 @@ export default function App() {
           flyTo={flyTo}
           onMapClick={handleMapClick}
         />
+        </ErrorBoundary>
       </div>
     </div>
   );

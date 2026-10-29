@@ -12,7 +12,7 @@ export default function LayerInfo({ view, grid, gridError, gapCategory, onGapCat
         {title}
       </h2>
 
-      {gridError && <p className="message message--error">{gridError}</p>}
+      {/* A failure to load shows with the panel's other messages (card 14). */}
       {!grid && !gridError && <p className="needs__note">Loading map data…</p>}
 
       {grid && view === "heat" && (
