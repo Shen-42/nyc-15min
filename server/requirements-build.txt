@@ -1,2 +1,2 @@
 # Only needed to run the scripts in scripts/ (graph, water, places). The server itself does not use these.
-osmnx>=2.0
+osmnx>=2.1.1
