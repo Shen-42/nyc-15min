@@ -10,6 +10,12 @@
 
 > The API runs on a free plan and sleeps when nobody's using it, so the first search can take up to a minute. After that it answers in milliseconds.
 
+## Why this exists
+
+The idea comes from Carlos Moreno, a professor at the Sorbonne, who proposed the [15-minute city](https://en.wikipedia.org/wiki/15-minute_city): a neighborhood where you can reach food, health care, school, parks, and transit within a 15-minute walk or bike ride. Paris took it up in 2020 under Mayor Anne Hidalgo, and other cities have followed.
+
+This project puts that test in anyone's hands. Residents, students, and researchers can check how well a block works on foot, compare neighborhoods, and see who gets left out. Even Manhattan, one of the most walkable places in the country, has gaps: in the October 2026 data, parts of Inwood have no pharmacy within a 15-minute walk, parts of the Lower East Side are more than 15 minutes from a subway station, and parts of Roosevelt Island have no grocery store in reach. Wheelchair mode shows how much further a missing curb ramp pushes things away.
+
 ## What you can do
 
 - **Click anywhere and see your walk.** The shaded area follows real streets and paths, not a circle drawn around you.
