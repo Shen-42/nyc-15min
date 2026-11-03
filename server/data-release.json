@@ -1,0 +1,30 @@
+{
+  "tag": "data-2026-11-03-7",
+  "built": "2026-11-03",
+  "files": {
+    "walk_graph.npz": {
+      "sha256": "7249d1d3b20ad6f32712a9e2684937bba71d650ed80beb41ad1310d01d8c524a",
+      "bytes": 37522574
+    },
+    "amenities.json": {
+      "sha256": "4834d939ad497c7ae166562d5b874a7ed056d4d6e315dd4db81fad6ed4d6fa33",
+      "bytes": 2073424
+    },
+    "parks.json": {
+      "sha256": "2714816b788f56bafff0332c45ec81e799cf960457549c13e82d9cfc9d0793d7",
+      "bytes": 592517
+    },
+    "water.json": {
+      "sha256": "5796b98e9a0ed3c2377eb9c3e968bbcf9922e6470b18e8420d69d79dd21ef3d5",
+      "bytes": 476869
+    },
+    "ramps.json": {
+      "sha256": "58c6f8f4845f59b7c22e44e3ceba0f85d45dd586565a17b13101e856ceb95250",
+      "bytes": 7169260
+    },
+    "grid.json": {
+      "sha256": "237a9a44f080e7e26816079d589562962658b314b2017a28124fab7b39f8c431",
+      "bytes": 1292130
+    }
+  }
+}
