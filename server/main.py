@@ -40,7 +40,7 @@ GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.npz"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
 AMENITIES_FILE = Path(__file__).parent / "data" / "amenities.json"
 RAMPS_FILE = Path(__file__).parent / "data" / "ramps.json"
-GRID_FILE = Path(__file__).parent / "data" / "grid.json"
+DATA_DIR = Path(__file__).parent / "data"
 PARKS_FILE = Path(__file__).parent / "data" / "parks.json"
 
 # Clicks farther than this from any street or path (the middle of a lake or a
@@ -66,7 +66,7 @@ amenity_by_id = {}
 # Street corners with no curb ramp, and the extra minutes each costs in a
 # wheelchair (card 11). Empty if the ramps file hasn't been built.
 ramp_penalty = {}
-# Every 100 m of Manhattan, scored ahead of time (card 12). None if not built.
+# Every 100 m of the city, scored ahead of time (cards 12 and 15). None if not built.
 grid = None
 # Walking areas saved in Redis, so they outlive the API sleeping (card 15).
 # None without REDIS_URL.
@@ -120,11 +120,11 @@ async def lifespan(app):
         print(f"Loaded {len(ramp_penalty):,} corners with no curb ramp")
     else:
         print(f"No ramps file at {RAMPS_FILE}. Wheelchair mode will only be slower. Run: python scripts/build_ramps.py")
-    if GRID_FILE.exists():
-        grid = Grid.from_file(GRID_FILE)
-        print(f"Loaded the Manhattan grid: {len(grid.data['cells']):,} cells, {len(grid):,} outside parks")
+    grid = Grid.from_dir(DATA_DIR)
+    if grid is not None:
+        print(f"Loaded the grid: {len(grid):,} squares outside parks in {', '.join(grid.boroughs)}")
     else:
-        print(f"No grid file at {GRID_FILE}. Run: python scripts/build_grid.py")
+        print(f"No grid files in {DATA_DIR}. Run: python scripts/build_grid.py")
     if GRAPH_FILE.exists():
         walk_graph = WalkGraph.from_file(GRAPH_FILE)
         print(f"Loaded walking graph: {len(walk_graph):,} nodes, {walk_graph.edge_count:,} edges")
@@ -437,11 +437,10 @@ def places(
         timer.lap("hours")
     score = score_walk(reached, settings)
     _, borough = boroughs.find(Point(lng, lat))  # None just off the shore
-    # How this spot compares with the rest of Manhattan (card 12). The grid
-    # was scored walking at any time, so the rank is only given for those,
-    # and it only covers Manhattan so far.
-    if grid is not None and mode == "walk" and at_time is None and minutes == 15 and borough == "Manhattan":
-        score["rank"] = grid.rank(score["score"], settings)
+    # How this spot compares with its borough and the city (cards 12 and 15).
+    # The grid was scored walking at any time, so the rank is only given for those.
+    if grid is not None and mode == "walk" and at_time is None and minutes == 15:
+        score["rank"] = grid.rank(score["score"], settings, borough)
     else:
         score["rank"] = None
     timer.lap("places")
@@ -457,19 +456,6 @@ def places(
         "barriers": barriers_reached(times, minutes - budget) if mode == "wheelchair" else [],
         "score": score,
     }
-
-
-@app.get("/api/grid")
-def grid_cells(request: Request, response: Response):
-    """Every 100 m of Manhattan with its score in each category, plus the
-    gaps and the best spot to fill each one (card 12). The site draws the
-    heat map and gap finder from this. Browsers aren't asked to keep it, so
-    a rebuilt grid shows up as soon as the server restarts."""
-    check_rate_limit(f"{client_ip(request)}:grid")
-    if grid is None:
-        raise HTTPException(status_code=503, detail="The Manhattan grid isn't built yet. Run: python scripts/build_grid.py")
-    response.headers["Cache-Control"] = "no-store"
-    return grid.data
 
 
 def barriers_reached(times, offset):

@@ -21,20 +21,6 @@
   stroke-width: 3;
 }
 
-.borough-label {
-  text-align: center;
-  font-weight: 700;
-  font-size: 13px;
-  color: #fff;
-  text-shadow: 0 0 3px #000;
-  line-height: 1.2;
-}
-
-.borough-label span {
-  font-weight: 400;
-  font-size: 11px;
-}
-
 /* Place markers. Leaflet positions .place-marker with a CSS transform,
    so size changes go on the inner .glyph. */
 .place-marker .glyph {

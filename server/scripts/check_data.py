@@ -27,7 +27,7 @@ FLOORS = {
     "graph segments": 450_000,  # about 532,000
     "subway stations": 350,  # the city has 472 stations; OpenStreetMap maps most as one
     "lakes and ponds": 30,
-    "grid cells": 5_000,  # Manhattan only for now: about 5,450 cells of 100 m on land
+    "grid cells": 60_000,  # about 71,000 squares of 100 m on land, near a street
 }
 
 LABELS = {
@@ -55,9 +55,11 @@ def current_counts():
     }
     for category, label in LABELS.items():
         counts[label] = by_category[category]
-    grid_file = DATA / "grid.json"
-    if grid_file.exists():
-        counts["grid cells"] = json.loads(grid_file.read_text())["meta"]["cell_count"]
+    grid_files = sorted(DATA.glob("grid-*.json"))  # one per borough (card 15)
+    if grid_files:
+        counts["grid cells"] = sum(json.loads(f.read_text())["meta"]["cell_count"] for f in grid_files)
+    elif (DATA / "grid.json").exists():  # the Manhattan-only grid, before card 15
+        counts["grid cells"] = json.loads((DATA / "grid.json").read_text())["meta"]["cell_count"]
     ramps_file = DATA / "ramps.json"
     if ramps_file.exists():
         meta = json.loads(ramps_file.read_text())["meta"]

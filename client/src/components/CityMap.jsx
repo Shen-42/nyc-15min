@@ -12,30 +12,13 @@ import {
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
-import {
-  MANHATTAN_CENTER,
-  MANHATTAN_BOUNDS,
-  MANHATTAN_POLYGONS,
-  OUTER_RING,
-  COMING_SOON_LABELS,
-} from "../data/manhattan";
+import { CITY_BOUNDS, CITY_CENTER, LAND_POLYGONS, OUTER_RING } from "../data/city";
 import BarrierMarkers from "./BarrierMarkers";
 import GridLayer from "./GridLayer";
 import { CATEGORY_BY_ID } from "../data/categories";
 import { cellScore, heatColor, hexToRgb, inPark, isGap } from "../data/grid";
 import { smoothstep } from "../data/gridImage";
 import PlaceMarkers from "./PlaceMarkers";
-
-// Text labels for the other boroughs. divIcon draws HTML instead of an image.
-const labelIcons = COMING_SOON_LABELS.map((b) => ({
-  ...b,
-  icon: L.divIcon({
-    className: "borough-label",
-    html: `${b.name}<br/><span>coming soon</span>`,
-    iconSize: [120, 36],
-    iconAnchor: [60, 18],
-  }),
-}));
 
 // Base map tiles. On the live site, Stadia allows requests by checking the
 // site's domain (registered in the Stadia dashboard), so no key is needed.
@@ -65,6 +48,35 @@ function FlyTo({ target }) {
   return null;
 }
 
+// Moves the map to a borough picked in the panel (card 15).
+function FitTo({ target }) {
+  const map = useMap();
+  useEffect(() => {
+    if (target) map.flyToBounds(target.bounds, { duration: 0.6, padding: [20, 20] });
+  }, [map, target]);
+  return null;
+}
+
+// Tells the app what part of the city is in view, when the map stops moving
+// and once at the start, so it can load the grid for those boroughs.
+function ViewWatcher({ onViewChange }) {
+  const map = useMap();
+  const report = () => {
+    const b = map.getBounds();
+    const c = map.getCenter();
+    onViewChange({
+      bounds: [
+        [b.getSouth(), b.getWest()],
+        [b.getNorth(), b.getEast()],
+      ],
+      center: [c.lat, c.lng],
+    });
+  };
+  useMapEvents({ moveend: report });
+  useEffect(report, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
 // react-leaflet hook: runs our function whenever the map is clicked.
 function ClickHandler({ onMapClick }) {
   useMapEvents({
@@ -76,7 +88,7 @@ function ClickHandler({ onMapClick }) {
 }
 
 // Colors for the shapes below come from styles/map.css, by class name.
-export default function ManhattanMap({
+export default function CityMap({
   selectedPoint,
   area,
   areaKey,
@@ -87,10 +99,12 @@ export default function ManhattanMap({
   weights,
   gapCategory,
   flyTo = null,
+  fitTo = null,
+  onViewChange = () => {},
   onMapClick,
 }) {
   // What the score map or gap finder draws (card 12): a value for each grid
-  // cell, and a color for each value. data/gridImage.js smooths the values
+  // square of the boroughs loaded so far (card 15), and a color for each value. data/gridImage.js smooths the values
   // into a gradient. Park cells have no value, since nobody lives there.
   const layer = useMemo(() => {
     if (!grid || view === "walk") return null;
@@ -99,7 +113,7 @@ export default function ManhattanMap({
       // Parks have no value of their own (nobody lives there), and are
       // filled in from the blocks around them so the gradient has no holes.
       return {
-        valueFor: (cell) => (inPark(cell) ? null : cellScore(cell, categories, weights)),
+        valueFor: (cell) => (inPark(cell, categories) ? null : cellScore(cell, categories, weights)),
         colorFor: (score) => [...heatColor(score), 1],
         sigma: 1.2,
         fill: true,
@@ -112,7 +126,7 @@ export default function ManhattanMap({
     const rgb = hexToRgb(getComputedStyle(document.documentElement).getPropertyValue(`--cat-${gapCategory}`).trim());
     // A gap in a park means nothing, so parks stay blank here.
     return {
-      valueFor: (cell) => (inPark(cell) ? null : isGap(cell, categories, gapCategory) ? 1 : 0),
+      valueFor: (cell) => (inPark(cell, categories) ? null : isGap(cell, categories, gapCategory) ? 1 : 0),
       colorFor: (share) => (share < 0.1 ? null : [...rgb, 0.9 * smoothstep(0.1, 0.45, share)]),
       sigma: 0.9,
       blank: [...grid.parks, ...grid.water],
@@ -120,16 +134,17 @@ export default function ManhattanMap({
   }, [grid, view, weights, gapCategory]);
 
   const walking = view === "walk";
-  const best = view === "gaps" && grid ? grid.gaps[gapCategory].best : null;
+  // Each loaded borough's best spot for a new place.
+  const stars = view === "gaps" && grid ? grid.best[gapCategory] : [];
 
   return (
     <MapContainer
       className="map"
-      center={MANHATTAN_CENTER}
+      center={CITY_CENTER}
       zoom={13}
-      minZoom={12}
+      minZoom={11}
       maxZoom={18}
-      maxBounds={MANHATTAN_BOUNDS}
+      maxBounds={CITY_BOUNDS}
       maxBoundsViscosity={1.0}
       attributionControl={false}
     >
@@ -151,27 +166,23 @@ export default function ManhattanMap({
 
       {/* className must be a direct prop: react-leaflet applies pathOptions
           after the shape is created, and Leaflet ignores className then. */}
-      <Polygon positions={[OUTER_RING, ...MANHATTAN_POLYGONS]} className="outside-mask" interactive={false} />
-
-      {labelIcons.map((b) => (
-        <Marker key={b.name} position={b.position} icon={b.icon} interactive={false} keyboard={false} />
-      ))}
+      <Polygon positions={[OUTER_RING, ...LAND_POLYGONS]} className="outside-mask" interactive={false} />
 
       {/* GeoJSON doesn't redraw when its data changes, so a new key forces
           a fresh layer. The key changes when a new result arrives, not when
           the dot moves, which happens before the result is back. */}
-      {layer && <GridLayer cells={grid.cells} cellM={grid.meta.cell_m} {...layer} />}
+      {layer && <GridLayer cells={grid.cells} meta={grid.meta} {...layer} />}
 
-      {best && (
-        <Marker position={[best.lat, best.lng]} icon={STAR_ICON} keyboard={false}>
+      {stars.map(({ borough, spot }) => (
+        <Marker key={borough} position={[spot.lat, spot.lng]} icon={STAR_ICON} keyboard={false}>
           <Tooltip direction="top" offset={[0, -16]} className="place-tooltip">
-            Best spot for a new {CATEGORY_BY_ID[gapCategory].one}
-            {best.near ? `, near ${best.near}` : ""}
+            Best spot in {borough} for a new {CATEGORY_BY_ID[gapCategory].one}
+            {spot.near ? `, near ${spot.near}` : ""}
           </Tooltip>
         </Marker>
-      )}
+      ))}
 
-      {/* Your walk's layers. Hidden in the score map and gap finder, which cover all of Manhattan. */}
+      {/* Your walk's layers. Hidden in the score map and gap finder, which cover the whole city. */}
       {walking && area && <GeoJSON key={areaKey} data={area} className="walk-area" interactive={false} />}
       {walking && <BarrierMarkers barriers={barriers} />}
       {walking && <PlaceMarkers places={places} />}
@@ -181,6 +192,8 @@ export default function ManhattanMap({
       )}
 
       <FlyTo target={flyTo} />
+      <FitTo target={fitTo} />
+      <ViewWatcher onViewChange={onViewChange} />
       <ClickHandler onMapClick={onMapClick} />
     </MapContainer>
   );

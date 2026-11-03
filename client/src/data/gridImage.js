@@ -1,24 +1,27 @@
-// Turns the Manhattan grid (card 12) into one smooth image for the map.
+// Turns the city grid (cards 12 and 15) into one smooth image for the map.
 //
 // Each grid cell is a point with a value (a score, or 1/0 for a gap). The
 // value at any spot on the image is a weighted average of the nearby points,
 // with weights that fall off smoothly with distance (a Gaussian, sigma in
 // grid cells). Dividing by the summed weights ("normalized convolution")
 // keeps edges and small holes from fading toward zero: a small park is filled
-// in by its neighbors. The image is then cut to Manhattan's shoreline so
-// nothing spills into the rivers, and any "blank" outlines (lakes, and for the
-// gap finder, parks) are cut out of it.
+// in by its neighbors. The image is then cut to the shoreline so nothing
+// spills into the rivers, and any "blank" outlines (lakes, and for the gap
+// finder, parks) are cut out of it.
+//
+// Only the part of the city in view is drawn (card 15): the whole city at
+// full detail would be a canvas of tens of millions of pixels. Zoomed out,
+// each grid square gets fewer pixels, which can't be told apart at that zoom.
 //
 // With fill on (the score map), cells with no value, the parks, are colored
 // from the blocks around them: where the normal smoothing has no data, a much
 // wider one takes over, so even the middle of Central Park gets a color that
 // blends with its edges instead of a hole.
 
-const M_PER_DEG_LAT = 110_540;
-// build_grid.py spaces columns using the longitude scale at this latitude.
-const GRID_LAT0 = 40.78;
-// Image pixels per grid cell. The browser smooths it further when zooming in.
-const PIXELS_PER_CELL = 6;
+// Image pixels per grid square, at most. The browser smooths it further when zooming in.
+const MAX_PIXELS_PER_CELL = 6;
+// The most pixels an image may have, so drawing stays quick zoomed out.
+const MAX_PIXELS = 2_500_000;
 // The wide smoothing that fills parks on the score map, in grid cells. Five
 // cells (500 m) reaches the middle of Central Park, 800 m across.
 const FILL_SIGMA = 5;
@@ -80,40 +83,43 @@ function sample(field, cols, rows, gx, gy) {
   return top * (1 - ty) + bottom * ty;
 }
 
-// Returns { url, bounds } for L.imageOverlay.
-//   valueFor(cell): a number, or null for "no data here" (big parks).
+// Returns { url, bounds } for L.imageOverlay, or null if no squares are in view.
+//   cells: [lat, lng, scores, flags, col, row] (see grid.js); meta: the grid's meta.
+//   view: { south, west, north, east }, the part of the map to draw.
+//   valueFor(cell): a number, or null for "no data here" (parks).
 //   colorFor(value): [r, g, b, alpha 0-1], or null to leave the spot clear.
-//   sigma: how far the smoothing reaches, in grid cells.
+//   sigma: how far the smoothing reaches, in grid squares.
 //   land: outlines to keep, as [[lat, lng], ...]; blank: outlines to cut out.
-//   fill: color cells with no value from their surroundings (see above).
-export function gridImage({ cells, cellM, valueFor, colorFor, sigma, land, blank = [], fill = false }) {
-  const stepLat = cellM / M_PER_DEG_LAT;
-  const stepLng = cellM / (111_320 * Math.cos((GRID_LAT0 * Math.PI) / 180));
-  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-  for (const [lat, lng] of cells) {
-    minLat = Math.min(minLat, lat);
-    maxLat = Math.max(maxLat, lat);
-    minLng = Math.min(minLng, lng);
-    maxLng = Math.max(maxLng, lng);
-  }
+//   fill: color squares with no value from their surroundings (see above).
+export function gridImage({ cells, meta, view, valueFor, colorFor, sigma, land, blank = [], fill = false }) {
+  const [originLat, originLng] = meta.origin;
+  const [stepLat, stepLng] = meta.step;
 
-  // A margin of empty cells so the fade at the edges isn't cut off.
+  // The squares in view, plus a margin so the fade at the edges isn't cut off.
   const kernel = gaussianKernel(sigma);
   const wide = gaussianKernel(FILL_SIGMA);
   const pad = (fill ? wide : kernel).radius + 1;
-  const cols = Math.round((maxLng - minLng) / stepLng) + 1 + 2 * pad;
-  const rows = Math.round((maxLat - minLat) / stepLat) + 1 + 2 * pad;
-  const lat0 = minLat - pad * stepLat;
-  const lng0 = minLng - pad * stepLng;
+  const c0 = Math.floor((view.west - originLng) / stepLng) - pad;
+  const c1 = Math.ceil((view.east - originLng) / stepLng) + pad;
+  const r0 = Math.floor((view.south - originLat) / stepLat) - pad;
+  const r1 = Math.ceil((view.north - originLat) / stepLat) + pad;
+  const cols = c1 - c0 + 1;
+  const rows = r1 - r0 + 1;
+  const inView = cells.filter((cell) => cell[4] >= c0 && cell[4] <= c1 && cell[5] >= r0 && cell[5] <= r1);
+  if (!inView.length) return null;
+  // The center of square (c0, r0), where the arrays below start.
+  const lat0 = originLat + (r0 + 0.5) * stepLat;
+  const lng0 = originLng + (c0 + 0.5) * stepLng;
+  const pixelsPerCell = Math.max(1, Math.min(MAX_PIXELS_PER_CELL, Math.floor(Math.sqrt(MAX_PIXELS / (cols * rows)))));
 
   // Row 0 is the south edge here. isLand marks every grid cell; hasData
   // only those with a value, so parks (no value) can be told from water.
   const values = new Float32Array(cols * rows);
   const hasData = new Float32Array(cols * rows);
   const isLand = new Float32Array(cols * rows);
-  for (const cell of cells) {
-    const x = Math.round((cell[1] - lng0) / stepLng);
-    const y = Math.round((cell[0] - lat0) / stepLat);
+  for (const cell of inView) {
+    const x = cell[4] - c0;
+    const y = cell[5] - r0;
     isLand[y * cols + x] = 1;
     const value = valueFor(cell);
     if (value === null) continue;
@@ -128,8 +134,8 @@ export function gridImage({ cells, cellM, valueFor, colorFor, sigma, land, blank
 
   const south = lat0, north = lat0 + (rows - 1) * stepLat;
   const west = lng0, east = lng0 + (cols - 1) * stepLng;
-  const width = (cols - 1) * PIXELS_PER_CELL;
-  const height = (rows - 1) * PIXELS_PER_CELL;
+  const width = (cols - 1) * pixelsPerCell;
+  const height = (rows - 1) * pixelsPerCell;
   const yNorth = mercY(north), ySouth = mercY(south);
 
   const canvas = document.createElement("canvas");
@@ -141,7 +147,7 @@ export function gridImage({ cells, cellM, valueFor, colorFor, sigma, land, blank
     const lat = latFromMercY(yNorth - ((py + 0.5) / height) * (yNorth - ySouth));
     const gy = (lat - lat0) / stepLat;
     for (let px = 0; px < width; px++) {
-      const gx = (px + 0.5) / PIXELS_PER_CELL;
+      const gx = (px + 0.5) / pixelsPerCell;
       const weight = sample(weightSum, cols, rows, gx, gy);
       let value, alpha;
       if (fill) {
@@ -180,9 +186,22 @@ export function gridImage({ cells, cellM, valueFor, colorFor, sigma, land, blank
   clipped.width = width;
   clipped.height = height;
   const clipCtx = clipped.getContext("2d");
+  // Only outlines whose bounding box overlaps the image; the city has
+  // thousands. (Checking for a corner inside the image isn't enough: zoomed
+  // into the middle of Queens, none of its outline's corners are in view.)
+  const near = (ring) => {
+    let s = Infinity, n = -Infinity, w = Infinity, e = -Infinity;
+    for (const [lat, lng] of ring) {
+      if (lat < s) s = lat;
+      if (lat > n) n = lat;
+      if (lng < w) w = lng;
+      if (lng > e) e = lng;
+    }
+    return s <= north && n >= south && w <= east && e >= west;
+  };
   const trace = (rings) => {
     clipCtx.beginPath();
-    for (const ring of rings) {
+    for (const ring of rings.filter(near)) {
       ring.forEach(([lat, lng], k) => {
         const x = ((lng - west) / (east - west)) * width;
         const y = ((yNorth - mercY(lat)) / (yNorth - ySouth)) * height;

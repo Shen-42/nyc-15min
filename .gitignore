@@ -1,6 +1,8 @@
 # Node
 node_modules/
 client/dist/
+# The grid for the score map, copied in by client/scripts/fetch-grid.mjs (card 15).
+client/public/grid/
 
 # Python
 __pycache__/

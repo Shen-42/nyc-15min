@@ -1,12 +1,14 @@
-// "Map view": your walk, the score map, or the gap finder (card 12).
-// Closed by default, like the other settings.
+import BoroughPicker from "./BoroughPicker";
+
+// "Map view": your walk, the score map, or the gap finder (card 12), and a
+// borough picker (card 15). Closed by default, like the other settings.
 export const VIEWS = [
   { id: "walk", label: "Your walk" },
   { id: "heat", label: "Score map" },
   { id: "gaps", label: "Gap finder" },
 ];
 
-export default function MapView({ view, onChange }) {
+export default function MapView({ view, onChange, borough, onPickBorough }) {
   const current = VIEWS.find((v) => v.id === view);
   return (
     <details className="needs">
@@ -28,8 +30,10 @@ export default function MapView({ view, onChange }) {
           ))}
         </div>
         <p className="needs__note">
-          These views cover all of Manhattan, on foot, at any hour.
+          These views cover the five boroughs, on foot, at any hour.
         </p>
+        <p className="needs__label">Go to</p>
+        <BoroughPicker borough={borough} onPick={onPickBorough} />
       </div>
     </details>
   );

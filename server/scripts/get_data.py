@@ -34,7 +34,8 @@ RELEASE_FILE = SERVER_DIR / "data-release.json"
 REPO = os.environ.get("GITHUB_REPOSITORY", "Shen-42/nyc-15min")
 BASE_URL = f"https://github.com/{REPO}/releases/download"
 # The files the server and the tests read.
-FILES = ["walk_graph.npz", "amenities.json", "parks.json", "water.json", "ramps.json", "grid.json"]
+GRID_FILES = [f"grid-{b}.json" for b in ("bronx", "brooklyn", "manhattan", "queens", "staten-island")]
+FILES = ["walk_graph.npz", "amenities.json", "parks.json", "water.json", "ramps.json", *GRID_FILES]
 TRIES = 4
 
 

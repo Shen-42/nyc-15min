@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SLOW_REQUEST_MS, apiFetch } from "./api";
 import { fetchArea } from "./area";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -7,9 +7,10 @@ import AccountDialog from "./account/AccountDialog";
 import AuthDialog from "./account/AuthDialog";
 import { useAccount } from "./account/useAccount";
 import { useAccountData } from "./account/useAccountData";
-import ManhattanMap from "./components/ManhattanMap";
+import CityMap from "./components/CityMap";
 import ResultsPanel from "./components/ResultsPanel";
-import { isInManhattan } from "./data/manhattan";
+import { BOROUGHS, boroughAt, boxesOverlap, isInCity } from "./data/city";
+import { combineGrids, loadBoroughGrid, loadGridIndex } from "./data/grid";
 import { loadMode, loadWeights, saveMode, saveWeights, weightsToQuery } from "./data/profiles";
 import { atQuery, formatHour, nycNow } from "./data/time";
 
@@ -45,9 +46,19 @@ export default function App() {
   // What the map shows (card 12): "walk" (your walk), "heat" (score map), or "gaps".
   const [view, setView] = useState("walk");
   const [gapCategory, setGapCategory] = useState("grocery");
-  // The Manhattan grid, loaded the first time the score map or gap finder opens.
-  const [grid, setGrid] = useState(null);
+  // The city grid (cards 12 and 15), one file per borough, loaded for the
+  // boroughs in view once the score map or gap finder opens. gridIndex says
+  // which file holds each borough; grids holds the loaded ones by slug.
+  const [gridIndex, setGridIndex] = useState(null);
+  const [grids, setGrids] = useState({});
+  const loadingGrids = useRef(new Set());
   const [gridError, setGridError] = useState(null);
+  // The part of the city in view ({ bounds, center }), and the borough at its
+  // middle, which the score map and gap finder describe (card 15).
+  const [mapView, setMapView] = useState(null);
+  const [borough, setBorough] = useState("Manhattan");
+  // Where the map should fit to when a borough is picked.
+  const [fitTo, setFitTo] = useState(null);
   // Bumped by "Try again" to load the grid again after a failure.
   const [gridAttempt, setGridAttempt] = useState(0);
   // Accounts (card 13): who is signed in, their saved places, and which
@@ -98,19 +109,45 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [weights, hour]);
 
-  // Load the grid once, when it's first needed. It's about 100 KB compressed.
+  // Load the grid for each borough in view, when the score map or gap finder
+  // is on. Each file is 70 to 250 KB compressed, and is loaded once.
   useEffect(() => {
-    if (view === "walk" || grid) return;
+    if (view === "walk" || !mapView) return;
     setGridError(null);
-    // "no-store": always ask the server, so a rebuilt grid is never hidden
-    // behind an old copy in the browser's cache.
-    apiFetch("/api/grid", { cache: "no-store" })
-      .then(async (res) => {
-        if (res.ok) return setGrid(await res.json());
-        setGridError({ text: await errorText(res, "Couldn't load the map data.") });
-      })
-      .catch((err) => setGridError({ text: failureText(err) }));
-  }, [view, grid, gridAttempt]);
+    const fail = (err) => setGridError({ text: err instanceof TypeError ? failureText(err) : err.message });
+    if (!gridIndex) {
+      loadGridIndex().then(setGridIndex, fail);
+      return;
+    }
+    if (!Object.keys(gridIndex.files ?? {}).length) {
+      setGridError({ text: "The data for this view hasn't been published yet." });
+      return;
+    }
+    for (const b of BOROUGHS) {
+      const path = gridIndex.files?.[b.slug];
+      if (!path || grids[b.slug] || loadingGrids.current.has(b.slug)) continue;
+      if (!boxesOverlap(b.allBounds, mapView.bounds)) continue;
+      loadingGrids.current.add(b.slug);
+      loadBoroughGrid(path)
+        .then((g) => setGrids((loaded) => ({ ...loaded, [b.slug]: g })), fail)
+        .finally(() => loadingGrids.current.delete(b.slug));
+    }
+  }, [view, mapView, gridIndex, grids, gridAttempt]);
+
+  const grid = useMemo(() => combineGrids(grids), [grids]);
+  const boroughGrid = grids[BOROUGHS.find((b) => b.name === borough)?.slug] ?? null;
+
+  function handleMapMove(next) {
+    setMapView(next);
+    const here = boroughAt(next.center);
+    if (here) setBorough(here.name);
+  }
+
+  function pickBorough(name) {
+    const b = BOROUGHS.find((x) => x.name === name);
+    setBorough(name);
+    setFitTo({ bounds: b.bounds, key: Date.now() });
+  }
 
   // A new way of getting around changes the shaded area too, so search again in full.
   useEffect(() => {
@@ -263,7 +300,7 @@ export default function App() {
     setFocus(null);
     setView("walk"); // a click asks about one spot, so go back to your walk
     setSheet((s) => (s === "hidden" ? "peek" : s)); // and its score should show
-    if (isInManhattan(point)) {
+    if (isInCity(point)) {
       setSelectedPoint(point);
       findWalkingArea(point);
     } else {
@@ -272,7 +309,7 @@ export default function App() {
       setSelectedPoint(null);
       setResult(null);
       setStatus("idle");
-      setMessage({ kind: "warn", text: "Only Manhattan is covered for now. Choose a spot on the island." });
+      setMessage({ kind: "warn", text: "That spot isn't on land in the five boroughs. Choose a spot in the city." });
     }
   }
 
@@ -300,6 +337,10 @@ export default function App() {
         view={view}
         onViewChange={setView}
         grid={grid}
+        gridIndex={gridIndex}
+        borough={borough}
+        boroughGrid={boroughGrid}
+        onPickBorough={pickBorough}
         gridError={gridError && { ...gridError, retry: () => setGridAttempt((n) => n + 1) }}
         gapCategory={gapCategory}
         onGapCategory={setGapCategory}
@@ -336,7 +377,7 @@ export default function App() {
       )}
       <div className="map-wrap" data-focus={focus ?? undefined}>
         <ErrorBoundary name="map">
-        <ManhattanMap
+        <CityMap
           selectedPoint={selectedPoint}
           area={result?.area}
           areaKey={result?.id}
@@ -348,6 +389,8 @@ export default function App() {
           weights={weights}
           gapCategory={gapCategory}
           flyTo={flyTo}
+          fitTo={fitTo}
+          onViewChange={handleMapMove}
           onMapClick={handleMapClick}
         />
         </ErrorBoundary>

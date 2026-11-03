@@ -1,9 +1,21 @@
 import { CATEGORIES, CATEGORY_BY_ID } from "../data/categories";
 import { HEAT_GRADIENT, HEAT_LEGEND } from "../data/grid";
+import BoroughPicker from "./BoroughPicker";
 
 // The heading, legend, and way back for the score map and gap finder (card 12).
-// Shown at the top of the panel while one of them is on.
-export default function LayerInfo({ view, grid, gridError, gapCategory, onGapCategory, onBack }) {
+// Shown at the top of the panel while one of them is on. It describes the
+// borough at the middle of the map, and the picker moves to another (card 15).
+export default function LayerInfo({
+  view,
+  grid,
+  borough,
+  boroughGrid,
+  onPickBorough,
+  gridError,
+  gapCategory,
+  onGapCategory,
+  onBack,
+}) {
   const title = view === "heat" ? "Score map" : "Gap finder";
 
   return (
@@ -12,13 +24,15 @@ export default function LayerInfo({ view, grid, gridError, gapCategory, onGapCat
         {title}
       </h2>
 
+      <BoroughPicker borough={borough} onPick={onPickBorough} />
+
       {/* A failure to load shows with the panel's other messages (card 14). */}
-      {!grid && !gridError && <p className="needs__note">Loading map data…</p>}
+      {!boroughGrid && !gridError && <p className="needs__note">Loading map data for {borough}…</p>}
 
       {grid && view === "heat" && (
         <>
           <p className="layer__text">
-            Scores across Manhattan for a 15-minute walk, weighted by your needs. Parks show the scores of
+            Scores across the city for a 15-minute walk, weighted by your needs. Parks show the scores of
             the blocks around them. Click a street for details.
           </p>
           {/* A gradient bar with numbers under it and words at both ends, so
@@ -44,7 +58,9 @@ export default function LayerInfo({ view, grid, gridError, gapCategory, onGapCat
         </>
       )}
 
-      {grid && view === "gaps" && <GapText grid={grid} categoryId={gapCategory} onCategory={onGapCategory} />}
+      {boroughGrid && view === "gaps" && (
+        <GapText grid={boroughGrid} borough={borough} categoryId={gapCategory} onCategory={onGapCategory} />
+      )}
 
       <button type="button" className="needs__preset layer__back" onClick={onBack}>
         Back to your walk
@@ -53,7 +69,7 @@ export default function LayerInfo({ view, grid, gridError, gapCategory, onGapCat
   );
 }
 
-function GapText({ grid, categoryId, onCategory }) {
+function GapText({ grid, borough, categoryId, onCategory }) {
   const category = CATEGORY_BY_ID[categoryId];
   const gap = grid.gaps[categoryId];
   const total = grid.meta.outside_park_count ?? grid.meta.cell_count;
@@ -77,10 +93,13 @@ function GapText({ grid, categoryId, onCategory }) {
       </label>
 
       {gap.cells === 0 ? (
-        <p className="layer__text">No gaps: every part of Manhattan has a {category.one} within a 15-minute walk.</p>
+        <p className="layer__text">
+          No gaps: every part of {borough} has a {category.one} within a 15-minute walk.
+        </p>
       ) : (
         <>
           <p className="layer__text">
+            In {borough},{" "}
             <strong>
               {gap.cells.toLocaleString()} of {total.toLocaleString()}
             </strong>{" "}
@@ -89,8 +108,8 @@ function GapText({ grid, categoryId, onCategory }) {
           </p>
           {best && (
             <p className="layer__text">
-              A new {category.one} {where} would serve <strong>{best.fixes.toLocaleString()}</strong> of them
-              (★ on the map).
+              A new {category.one} {where} would put <strong>{best.fixes.toLocaleString()}</strong> of these
+              areas, or their neighbors across the borough line, within a 15-minute walk (★ on the map).
             </p>
           )}
         </>

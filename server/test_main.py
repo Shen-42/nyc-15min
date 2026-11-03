@@ -135,16 +135,29 @@ def test_wheelchair_mode_reaches_less_and_rejects_unknown_modes():
     rate_limiter.counter.clear()
 
 
-def test_grid_and_rank():
+def test_rank_against_the_borough_and_the_city():
     from pathlib import Path
 
     import pytest
 
     data = Path(__file__).parent / "data"
-    if not (data / "walk_graph.npz").exists() or not (data / "grid.json").exists():
+    if not (data / "walk_graph.npz").exists() or not list(data.glob("grid-*.json")):
         pytest.skip("run scripts/build_graph.py and scripts/build_grid.py first")
     from main import rate_limiter
 
+    rate_limiter.counter.clear()
+    times_square = {"lat": 40.758, "lng": -73.9855}
+    with TestClient(app) as c:
+        walk = c.get("/api/places", params=times_square).json()
+        rank = walk["score"]["rank"]
+        assert rank["name"] == "Manhattan"
+        assert 0 <= rank["borough"] <= 100 and 0 <= rank["city"] <= 100
+        # Times Square has nearly everything nearby: it beats most of the city.
+        assert rank["city"] > 50
+        chair = c.get("/api/places", params={**times_square, "mode": "wheelchair"}).json()
+        assert chair["score"]["rank"] is None
+        # The grid now comes from the site's own files, not the API (card 15).
+        assert c.get("/api/grid").status_code == 404
     rate_limiter.counter.clear()
     times_square = {"lat": 40.758, "lng": -73.9855}
     with TestClient(app) as c:

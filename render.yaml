@@ -82,6 +82,15 @@ services:
       - path: /*
         name: Strict-Transport-Security
         value: max-age=31536000
+      # The city grid (card 15). Each file's name includes its fingerprint,
+      # so browsers may keep it for a year; the index naming them is checked
+      # on every visit, so a new month's grid shows up right away.
+      - path: /grid/files/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /grid/index.json
+        name: Cache-Control
+        value: no-cache
     envVars:
       - key: NODE_VERSION
         value: "22"

@@ -5,6 +5,7 @@ import CategoryRow from "./CategoryRow";
 import LayerInfo from "./LayerInfo";
 import Message from "./Message";
 import MapView from "./MapView";
+import { rankText } from "./BoroughPicker";
 import NeedsProfile from "./NeedsProfile";
 import TimeOfDay from "./TimeOfDay";
 import SavedPlaces from "../account/SavedPlaces";
@@ -32,6 +33,10 @@ export default function ResultsPanel({
   view,
   onViewChange,
   grid,
+  gridIndex,
+  borough,
+  boroughGrid,
+  onPickBorough,
   gridError,
   gapCategory,
   onGapCategory,
@@ -104,6 +109,10 @@ export default function ResultsPanel({
         <LayerInfo
           view={view}
           grid={grid}
+          gridIndex={gridIndex}
+          borough={borough}
+          boroughGrid={boroughGrid}
+          onPickBorough={onPickBorough}
           gridError={gridError}
           gapCategory={gapCategory}
           onGapCategory={onGapCategory}
@@ -115,13 +124,13 @@ export default function ResultsPanel({
       {/* Screen readers announce changes in this region (search started, finished, failed). */}
       <div role="status" aria-live="polite">
         {!result && !loading && !message && (
-          <p className="panel__intro">Choose a spot in Manhattan to see what's within a 15-minute walk.</p>
+          <p className="panel__intro">Choose a spot anywhere in New York City to see what's within a 15-minute walk.</p>
         )}
         {!result && loading && <p className="panel__intro">Finding everything within a 15-minute walk…</p>}
         {result && (
           <p className="visually-hidden">
             Score {result.score.score} out of 100. {verdict(result.score.score)}
-            {result.score.rank != null && ` Better than ${result.score.rank}% of Manhattan.`}
+            {result.score.rank != null && ` ${rankText(result.score.rank)}`}
           </p>
         )}
       </div>
@@ -137,10 +146,8 @@ export default function ResultsPanel({
             <p className="score-summary__verdict" aria-hidden="true">
               {verdict(result.score.score)}
             </p>
-            {/* Card 12. Only for walking at any time, which is how the grid was scored. */}
-            {result.score.rank != null && (
-              <p className="score-summary__rank">Better than {result.score.rank}% of Manhattan.</p>
-            )}
+            {/* Cards 12 and 15. Only for walking at any time, which is how the grid was scored. */}
+            {result.score.rank != null && <p className="score-summary__rank">{rankText(result.score.rank)}</p>}
             <p className="score-summary__detail">
               {result.mode === "wheelchair" && "By wheelchair. "}
               Nearest of each: {result.score.proximity_minutes} min away on average.
@@ -176,7 +183,7 @@ export default function ResultsPanel({
       <div className="settings">
         <TimeOfDay hour={hour} onChange={onHourChange} />
         <NeedsProfile weights={weights} onChange={onWeightsChange} mode={mode} onModeChange={onModeChange} />
-        <MapView view={view} onChange={onViewChange} />
+        <MapView view={view} onChange={onViewChange} borough={borough} onPickBorough={onPickBorough} />
         {account.session && <SavedPlaces places={savedPlaces} onGo={onGoToPlace} onRemove={onRemovePlace} />}
       </div>
 
