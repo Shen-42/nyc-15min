@@ -8,7 +8,7 @@ from graph import WalkGraph
 
 DATA = Path(__file__).parent / "data"
 AMENITIES_FILE = DATA / "amenities.json"
-GRAPH_FILE = DATA / "walk_graph.json"
+GRAPH_FILE = DATA / "walk_graph.npz"
 needs_data = pytest.mark.skipif(
     not (AMENITIES_FILE.exists() and GRAPH_FILE.exists()),
     reason="run scripts/build_graph.py and scripts/build_amenities.py first",

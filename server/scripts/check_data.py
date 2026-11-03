@@ -41,13 +41,16 @@ LABELS = {
 
 
 def current_counts():
-    graph = json.loads((DATA / "walk_graph.json").read_text())
+    import numpy as np
+
+    with np.load(DATA / "walk_graph.npz") as graph:
+        node_count, edge_count = len(graph["ids"]), len(graph["edge_a"])
     water = json.loads((DATA / "water.json").read_text())
     places = json.loads((DATA / "amenities.json").read_text())
     by_category = Counter(p["category"] for p in places)
     counts = {
-        "graph nodes": len(graph["nodes"]),
-        "graph segments": len(graph["edges"]),
+        "graph nodes": node_count,
+        "graph segments": edge_count,
         "lakes and ponds": len(water),
     }
     for category, label in LABELS.items():

@@ -46,6 +46,10 @@ services:
   - type: keyvalue
     name: nyc-15min-limits
     plan: free
+    # Also holds saved walking areas (server/shared_cache.py). When its
+    # 25 MB fill up, drop the least recently used keys (Render's default,
+    # written out here so it doesn't change by accident).
+    maxmemoryPolicy: allkeys-lru
     ipAllowList: [] # only the API, over Render's private network
 
   # The React site, served as static files from Render's CDN. Always on.

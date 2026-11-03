@@ -2,23 +2,36 @@
 
 Nodes are street intersections and points along paths. Edges are walkable
 segments between them, with a length in meters. Walking works both ways, so
-every edge is added in both directions.
+every edge can be walked in both directions.
+
+The graph is kept as NumPy arrays rather than Python dicts and lists
+(card 15). For all five boroughs that's 62 MB instead of 366 MB, and the
+file loads in 0.2 s instead of 8. The search itself is scipy's Dijkstra.
+Node ids are OpenStreetMap ids everywhere outside this file, as before.
 """
 
-import heapq  # priority queue for Dijkstra
 import json
 import math
-from collections import defaultdict
+from collections.abc import Mapping
 from pathlib import Path
+
+import numpy as np
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import dijkstra
+from scipy.spatial import cKDTree
 
 EARTH_RADIUS_M = 6_371_000
 
 # Average walking pace: 80 meters per minute is about 3 mph or 4.8 km/h.
 WALK_SPEED_M_PER_MIN = 80
 
-# Size of one grid cell for the nearest-node index, in degrees.
-# 0.002 degrees is about 220 m north-south and 170 m east-west in Manhattan.
-GRID_DEG = 0.002
+# nearest_node checks this many of the closest nodes on a flat map, then
+# picks the closest by true distance, so flattening never picks wrong.
+NEAREST_CANDIDATES = 8
+
+# Copies of the graph in minutes to keep: walking, and one per wheelchair
+# setup (card 11). Each is about 8 MB for all five boroughs.
+MAX_SEARCH_GRAPHS = 4
 
 
 def distance_m(lat1, lng1, lat2, lng2):
@@ -30,88 +43,190 @@ def distance_m(lat1, lng1, lat2, lng2):
     return 2 * EARTH_RADIUS_M * math.asin(math.sqrt(a))
 
 
+class Coords(Mapping):
+    """node id -> (lat, lng). Reads the arrays, and works like the dict it replaced."""
+
+    def __init__(self, graph):
+        self._graph = graph
+
+    def __getitem__(self, node_id):
+        i = self._graph._index(node_id)
+        return (float(self._graph.lat[i]), float(self._graph.lng[i]))
+
+    def __iter__(self):
+        return iter(self._graph.ids.tolist())
+
+    def __len__(self):
+        return len(self._graph.ids)
+
+    def __contains__(self, node_id):
+        try:
+            self._graph._index(node_id)
+        except KeyError:
+            return False
+        return True
+
+    def values(self):
+        return list(zip(self._graph.lat.tolist(), self._graph.lng.tolist()))
+
+    def items(self):
+        return list(zip(self._graph.ids.tolist(), self.values()))
+
+
 class WalkGraph:
-    def __init__(self, nodes, edges):
+    def __init__(self, nodes, edges, meta=None, curb_nodes=(), streets=None):
         """nodes: list of [id, lat, lng].
         edges: list of [node_a, node_b, length_m], optionally followed by the
         [lat, lng] points along a curved path from node_a to node_b.
         """
-        self.coords = {node_id: (lat, lng) for node_id, lat, lng in nodes}
-        # Adjacency list: node id -> list of (neighbor id, length in meters).
-        self.adj = {node_id: [] for node_id in self.coords}
-        # Points along curved paths, only used for drawing: (a, b) -> [[lat, lng], ...]
-        self.shapes = {}
-        for a, b, length, *between in edges:
-            self.adj[a].append((b, length))
-            self.adj[b].append((a, length))
-            if between:
-                self.shapes[(a, b)] = between[0]
-        self.edge_count = len(edges)
-        self.meta = {}
+        ids = np.array([n[0] for n in nodes], dtype=np.int64)
+        order = np.argsort(ids, kind="stable")
+        ids = ids[order]
+        lat = np.array([n[1] for n in nodes], dtype=np.float64)[order]
+        lng = np.array([n[2] for n in nodes], dtype=np.float64)[order]
 
-        # Spatial index: the map is cut into GRID_DEG squares, and each square
-        # lists the nodes inside it. nearest_node then only checks the squares
-        # around a point instead of all ~37,000 nodes.
-        self.grid = defaultdict(list)
-        for node_id, (lat, lng) in self.coords.items():
-            self.grid[self._cell(lat, lng)].append(node_id)
+        def index(node_ids):
+            return np.searchsorted(ids, np.array(node_ids, dtype=np.int64)).astype(np.int32)
+
+        counts = [len(e[3]) if len(e) > 3 else 0 for e in edges]
+        points = [p for e in edges if len(e) > 3 for p in e[3]]
+        self._setup(
+            ids=ids,
+            lat=lat,
+            lng=lng,
+            edge_a=index([e[0] for e in edges]),
+            edge_b=index([e[1] for e in edges]),
+            edge_length=np.array([e[2] for e in edges], dtype=np.float64),
+            shape_start=np.concatenate([[0], np.cumsum(counts, dtype=np.int64)]).astype(np.int64),
+            shape_points=np.array(points, dtype=np.float64).reshape(-1, 2),
+            meta=meta or {},
+            curb_nodes=list(curb_nodes),
+            streets=streets or {},
+        )
+
+    def _setup(self, ids, lat, lng, edge_a, edge_b, edge_length, shape_start, shape_points, meta, curb_nodes, streets):
+        self.ids, self.lat, self.lng = ids, lat, lng
+        # Edges by position in `ids`. Edge k's curve points (from a to b, ends
+        # left out) are shape_points[shape_start[k]:shape_start[k + 1]].
+        self.edge_a, self.edge_b, self.edge_length = edge_a, edge_b, edge_length
+        self.shape_start, self.shape_points = shape_start, shape_points
+        self.meta = meta
+        self.curb_nodes = curb_nodes  # where you step off a curb (card 11)
+        self.streets = streets  # {node id: street names} at intersections (card 12)
+        self.coords = Coords(self)
+
+        # Both directions of every edge, grouped by start node (CSR): node i's
+        # neighbors are col[indptr[i]:indptr[i + 1]], at lengths weight[...].
+        n = len(ids)
+        src = np.concatenate([edge_a, edge_b])
+        dst = np.concatenate([edge_b, edge_a])
+        order = np.argsort(src, kind="stable")
+        self.indptr = np.concatenate([[0], np.cumsum(np.bincount(src, minlength=n))]).astype(np.int32)
+        self.col = dst[order].astype(np.int32)
+        # 64-bit on purpose: given 32-bit, scipy copies the whole graph to
+        # 64-bit on every search, which made each one about 10x slower.
+        self.weight = np.concatenate([edge_length, edge_length])[order]
+        self.edge_of = np.concatenate([np.arange(len(edge_a)), np.arange(len(edge_a))])[order].astype(np.int32)
+        # The search runs on copies of the graph in minutes, one per speed
+        # (and wheelchair penalty table), made when first needed.
+        self._minute_graphs = {}
+        self._in_minutes(WALK_SPEED_M_PER_MIN, None)
+
+        # Nearest-node index on a flat map in meters. Fine at city scale; the
+        # final pick uses the true distance.
+        self._lat0 = float(lat.mean()) if n else 40.75
+        self._x_scale = 111_320 * math.cos(math.radians(self._lat0))
+        self._tree = cKDTree(np.column_stack([lng * self._x_scale, lat * 111_320])) if n else None
 
     @classmethod
     def from_file(cls, path):
-        data = json.loads(Path(path).read_text())
-        graph = cls(data["nodes"], data["edges"])
-        graph.meta = data.get("meta", {})
+        """Load a graph saved by save() (.npz), or the older JSON format."""
+        path = Path(path)
+        if path.suffix == ".json":
+            data = json.loads(path.read_text())
+            return cls(data["nodes"], data["edges"], data.get("meta"), data.get("curb_nodes", ()), data.get("streets"))
+        with np.load(path, allow_pickle=False) as d:
+            graph = cls.__new__(cls)
+            graph._setup(
+                ids=d["ids"],
+                lat=d["lat"],
+                lng=d["lng"],
+                edge_a=d["edge_a"],
+                edge_b=d["edge_b"],
+                edge_length=d["edge_length"],
+                shape_start=d["shape_start"],
+                shape_points=d["shape_points"],
+                meta=json.loads(str(d["meta"])),
+                curb_nodes=d["curb_nodes"].tolist(),
+                streets=json.loads(str(d["streets"])),
+            )
         return graph
 
+    def save(self, path):
+        """Write the graph as one .npz file that from_file() reads."""
+        np.savez(
+            path,
+            ids=self.ids,
+            lat=self.lat,
+            lng=self.lng,
+            edge_a=self.edge_a,
+            edge_b=self.edge_b,
+            edge_length=self.edge_length,
+            shape_start=self.shape_start,
+            shape_points=self.shape_points,
+            meta=np.array(json.dumps(self.meta)),
+            curb_nodes=np.array(self.curb_nodes, dtype=np.int64),
+            streets=np.array(json.dumps(self.streets, separators=(",", ":"))),
+        )
+
     def __len__(self):
-        return len(self.coords)
+        return len(self.ids)
+
+    @property
+    def edge_count(self):
+        return len(self.edge_a)
+
+    @property
+    def curved_edge_count(self):
+        """How many edges keep the points along a curved path."""
+        return int(np.count_nonzero(np.diff(self.shape_start)))
+
+    def _index(self, node_id):
+        """Position of an OpenStreetMap node id in the arrays. KeyError if absent."""
+        i = int(np.searchsorted(self.ids, node_id))
+        if i < len(self.ids) and self.ids[i] == node_id:
+            return i
+        raise KeyError(node_id)
 
     def neighbors(self, node_id):
-        """List of (neighbor id, length in meters). Card 4's Dijkstra uses this."""
-        return self.adj[node_id]
+        """List of (neighbor id, length in meters)."""
+        i = self._index(node_id)
+        lo, hi = self.indptr[i], self.indptr[i + 1]
+        return list(zip(self.ids[self.col[lo:hi]].tolist(), self.weight[lo:hi].tolist()))
 
     def edge_points(self, a, b):
         """The path from node a to node b as (lat, lng) points, both ends included."""
-        if (a, b) in self.shapes:
-            between = self.shapes[(a, b)]
-        elif (b, a) in self.shapes:
-            between = self.shapes[(b, a)][::-1]
-        else:
-            between = []
-        return [self.coords[a], *(tuple(p) for p in between), self.coords[b]]
-
-    @staticmethod
-    def _cell(lat, lng):
-        return (math.floor(lat / GRID_DEG), math.floor(lng / GRID_DEG))
+        i, j = self._index(a), self._index(b)
+        lo, hi = self.indptr[i], self.indptr[i + 1]
+        found = np.flatnonzero(self.col[lo:hi] == j)
+        between = []
+        if len(found):
+            k = self.edge_of[lo + found[0]]
+            between = [tuple(p) for p in self.shape_points[self.shape_start[k]:self.shape_start[k + 1]].tolist()]
+            if self.edge_a[k] != i:
+                between.reverse()
+        return [self.coords[a], *between, self.coords[b]]
 
     def nearest_node(self, lat, lng):
-        """Return (node id, distance in meters) of the node closest to a point.
-
-        Searches the grid in growing square rings around the point's cell:
-        first the cell itself, then the 8 around it, then the 16 around those.
-        Any node outside ring r is at least r cells away, so once the best
-        node found is closer than r cells, no farther ring can beat it.
-        """
-        ci, cj = self._cell(lat, lng)
-        # Meters per cell in the narrower direction (east-west), so the
-        # stopping rule never stops too early.
-        cell_m = GRID_DEG * 111_320 * math.cos(math.radians(lat))
-        best_id, best_dist = None, math.inf
-        max_ring = 200  # about 35 km: farther than anything in Manhattan
-
-        for r in range(max_ring + 1):
-            for i in range(ci - r, ci + r + 1):
-                for j in range(cj - r, cj + r + 1):
-                    if max(abs(i - ci), abs(j - cj)) != r:
-                        continue  # inner rings were already checked
-                    for node_id in self.grid.get((i, j), ()):
-                        node_lat, node_lng = self.coords[node_id]
-                        d = distance_m(lat, lng, node_lat, node_lng)
-                        if d < best_dist:
-                            best_id, best_dist = node_id, d
-            if best_id is not None and best_dist <= r * cell_m:
-                break
-        return best_id, best_dist
+        """Return (node id, distance in meters) of the node closest to a point."""
+        k = min(NEAREST_CANDIDATES, len(self.ids))
+        _, found = self._tree.query([lng * self._x_scale, lat * 111_320], k=k)
+        best_i, best_dist = None, math.inf
+        for i in np.atleast_1d(found).tolist():
+            d = distance_m(lat, lng, self.lat[i], self.lng[i])
+            if d < best_dist:
+                best_i, best_dist = i, d
+        return int(self.ids[best_i]), best_dist
 
     def reachable_within(self, start, max_minutes, speed_m_per_min=WALK_SPEED_M_PER_MIN, node_penalty=None):
         """Every node you can walk to from `start` within `max_minutes`.
@@ -123,45 +238,41 @@ class WalkGraph:
         node_penalty: optional {node_id: extra minutes} added when passing
         through a node, such as a corner with no curb ramp (card 11).
 
-        This is Dijkstra's algorithm with a cutoff. One way to write it:
-
-        1. Make a priority queue as a plain list and push (0, start) onto it.
-           heapq.heappush(queue, item) adds an item and heapq.heappop(queue)
-           removes the item with the smallest first value. Tuples compare by
-           their first value, so (minutes, node) pops the closest node first.
-        2. Make a dict `best` that holds the shortest time found so far for
-           each node. Set best[start] = 0.
-        3. While the queue isn't empty:
-             a. Pop (minutes, node).
-             b. If minutes > best[node], skip this entry. It's an old one,
-                pushed before a shorter route to the same node was found.
-             c. For each (neighbor, length_m) in self.neighbors(node):
-                  new_minutes = minutes + length_m / WALK_SPEED_M_PER_MIN
-                  If new_minutes > max_minutes, skip it: too far.
-                  If neighbor isn't in best, or new_minutes < best[neighbor],
-                  set best[neighbor] = new_minutes and push it onto the queue.
-        4. Return best.
-
-        Run `pytest test_reachable.py` to check it.
+        This is Dijkstra's algorithm with a cutoff, run by scipy in compiled
+        code. Its `limit` stops the search at the time budget, so it only
+        visits the ~1,600 nodes within reach, not the whole city. Edges are
+        in minutes, so the sums are the same, to the last digit, as adding
+        up minutes in Python the way this method used to.
         """
-        queue = [(0, start)]  # (minutes, node), closest first
-        best = {start: 0}  # shortest known time to each node
+        i = self._index(start)
+        if max_minutes < 0:
+            return {start: 0}
+        dist = dijkstra(self._in_minutes(speed_m_per_min, node_penalty), directed=True, indices=i, limit=max_minutes)
+        hit = np.flatnonzero(dist <= max_minutes)
+        return dict(zip(self.ids[hit].tolist(), dist[hit].tolist()))
 
-        while queue:
-            minutes, node = heapq.heappop(queue)
-
-            # A shorter route to this node was found after this entry was pushed.
-            if minutes > best[node]:
-                continue
-
-            for neighbor, length_m in self.neighbors(node):
-                new_minutes = minutes + length_m / speed_m_per_min
-                if node_penalty:
-                    new_minutes += node_penalty.get(neighbor, 0)
-                if new_minutes > max_minutes:
-                    continue  # too far
-                if neighbor not in best or new_minutes < best[neighbor]:
-                    best[neighbor] = new_minutes
-                    heapq.heappush(queue, (new_minutes, neighbor))
-
-        return best
+    def _in_minutes(self, speed_m_per_min, node_penalty):
+        """The graph with each edge in minutes at this speed, plus the penalty
+        for entering a node, if any. Made once per speed and penalty table."""
+        penalty = node_penalty or None
+        key = (speed_m_per_min, id(penalty), len(penalty or ()))
+        cached = self._minute_graphs.get(key)
+        if cached is not None and cached[0] is penalty:
+            return cached[1]
+        minutes = self.weight / speed_m_per_min
+        if penalty:
+            extra = np.zeros(len(self.ids))
+            nodes = np.fromiter(penalty.keys(), dtype=np.int64, count=len(penalty))
+            added = np.fromiter(penalty.values(), dtype=np.float64, count=len(penalty))
+            at = np.minimum(np.searchsorted(self.ids, nodes), len(self.ids) - 1)
+            known = self.ids[at] == nodes
+            extra[at[known]] = added[known]
+            minutes = minutes + extra[self.col]
+        n = len(self.ids)
+        matrix = csr_matrix((minutes, self.col, self.indptr), shape=(n, n))
+        if len(self._minute_graphs) >= MAX_SEARCH_GRAPHS:
+            # Start over, keeping walking at the usual pace.
+            self._minute_graphs = {k: v for k, v in self._minute_graphs.items() if k[0] == WALK_SPEED_M_PER_MIN and k[1] == id(None)}
+        # The table itself is kept too, so its id can't be reused by another.
+        self._minute_graphs[key] = (penalty, matrix)
+        return matrix

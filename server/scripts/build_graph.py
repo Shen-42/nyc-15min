@@ -4,11 +4,12 @@ Run once from the server folder, with the virtual environment active:
     pip install -r requirements-build.txt
     python scripts/build_graph.py
 
-It writes data/walk_graph.json. The server reads that file when it starts
-and does not need OSMnx itself.
+It writes data/walk_graph.npz, the graph as NumPy arrays (see graph.py).
+The server reads that file when it starts and does not need OSMnx itself.
 """
 
 import json
+import sys
 import time
 from collections import defaultdict
 from datetime import date
@@ -21,9 +22,12 @@ from shapely.ops import unary_union
 
 import overpass  # scripts/overpass.py: server choice and retries
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from graph import WalkGraph  # noqa: E402
+
 SERVER_DIR = Path(__file__).resolve().parent.parent
 BOUNDARY_FILE = SERVER_DIR.parent / "client" / "src" / "data" / "manhattan-boundary.json"
-OUTPUT_FILE = SERVER_DIR / "data" / "walk_graph.json"
+OUTPUT_FILE = SERVER_DIR / "data" / "walk_graph.npz"
 
 # The same land the map lets you click on (see client/src/data/manhattan.js).
 LAND = ["main", "roosevelt"]
@@ -141,25 +145,15 @@ def main():
         edges.append(edge)
 
     OUTPUT_FILE.parent.mkdir(exist_ok=True)
-    OUTPUT_FILE.write_text(
-        json.dumps(
-            {
-                "meta": {
-                    "source": "OpenStreetMap contributors, via OSMnx",
-                    "network_type": "walk",
-                    "built": date.today().isoformat(),
-                    "node_count": len(nodes),
-                    "edge_count": len(edges),
-                    "curb_count": len(curbs),
-                },
-                "nodes": nodes,  # [id, lat, lng]
-                "edges": edges,  # [node_a, node_b, length_m, optional points between]
-                "curb_nodes": curbs,  # nodes where you step off a curb (card 11)
-                "streets": streets,  # {node id: street names} at intersections (card 12)
-            },
-            separators=(",", ":"),
-        )
-    )
+    meta = {
+        "source": "OpenStreetMap contributors, via OSMnx",
+        "network_type": "walk",
+        "built": date.today().isoformat(),
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "curb_count": len(curbs),
+    }
+    WalkGraph(nodes, edges, meta, curbs, streets).save(OUTPUT_FILE)
     size_mb = OUTPUT_FILE.stat().st_size / 1_000_000
     print(f"Saved {len(nodes):,} nodes and {len(edges):,} edges to {OUTPUT_FILE} ({size_mb:.1f} MB)")
 

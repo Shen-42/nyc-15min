@@ -7,7 +7,7 @@ from shapely.ops import unary_union
 from graph import WALK_SPEED_M_PER_MIN, WalkGraph
 from walk_area import cut_path, load_land, load_water, walking_area
 
-GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.json"
+GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.npz"
 LAND_FILE = Path(__file__).parent / "data" / "manhattan-boundary.json"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
 needs_water = pytest.mark.skipif(not WATER_FILE.exists(), reason="run scripts/build_water.py first")
@@ -69,7 +69,7 @@ def test_does_not_spill_into_the_hudson(manhattan):
 @needs_graph
 def test_paths_keep_their_curves(manhattan):
     # Rebuilt graphs store the points along curved paths.
-    assert len(manhattan.shapes) > 1000
+    assert manhattan.curved_edge_count > 1000
 
 
 @needs_graph

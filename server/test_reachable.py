@@ -79,7 +79,7 @@ def test_node_penalty_adds_minutes_and_can_change_the_route():
 
 
 # On the real Manhattan graph. Skipped if the graph file is missing.
-GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.json"
+GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.npz"
 
 
 @pytest.mark.skipif(not GRAPH_FILE.exists(), reason="run scripts/build_graph.py first")

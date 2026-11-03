@@ -6,6 +6,8 @@ Run from this folder with:
 
 import logging
 import os
+import resource
+import sys
 import time
 import traceback
 import uuid
@@ -29,10 +31,11 @@ from hours import parse_at, status_at
 from modes import NO_RAMP_PENALTY_MIN, SPEEDS, load_no_ramp_nodes, parse_mode
 from rate_limit import RateLimited, RateLimiter, make_counter
 from scoring import parse_weights, score_walk, settings_with_weights
+from shared_cache import make_shared_cache
 from usage import make_usage
 from walk_area import load_land, load_parks, load_water, walking_area
 
-GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.json"
+GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.npz"
 LAND_FILE = Path(__file__).parent / "data" / "manhattan-boundary.json"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
 AMENITIES_FILE = Path(__file__).parent / "data" / "amenities.json"
@@ -62,11 +65,28 @@ amenity_by_id = {}
 ramp_penalty = {}
 # Every 100 m of Manhattan, scored ahead of time (card 12). None if not built.
 grid = None
+# Walking areas saved in Redis, so they outlive the API sleeping (card 15).
+# None without REDIS_URL.
+shared_cache = None
+
+# Part of every shared-cache key. Bump it when walk_area.py changes how
+# areas are drawn, so areas drawn the old way aren't served.
+AREA_FORMAT = 1
+
+
+def peak_memory_mb():
+    """The most memory this process has used so far, in MB."""
+    if sys.platform.startswith("linux"):
+        with open("/proc/self/status") as status:
+            for line in status:
+                if line.startswith("VmHWM:"):
+                    return int(line.split()[1]) / 1000  # KB
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6  # macOS: bytes
 
 
 @asynccontextmanager
 async def lifespan(app):
-    global walk_graph, land, water, parks, amenities, amenity_by_id, ramp_penalty, grid
+    global walk_graph, land, water, parks, amenities, amenity_by_id, ramp_penalty, grid, shared_cache
     if AMENITIES_FILE.exists():
         amenities = load_amenities(AMENITIES_FILE)
         amenity_by_id = {a["id"]: a for a in amenities}
@@ -101,9 +121,13 @@ async def lifespan(app):
     if GRAPH_FILE.exists():
         walk_graph = WalkGraph.from_file(GRAPH_FILE)
         print(f"Loaded walking graph: {len(walk_graph):,} nodes, {walk_graph.edge_count:,} edges")
+        version = f"{AREA_FORMAT}-{walk_graph.meta.get('built')}-{len(walk_graph)}"
+        shared_cache = make_shared_cache(version)
     else:
         print(f"No walking graph at {GRAPH_FILE}. Run: python scripts/build_graph.py")
     accounts.setup(usage, check_rate_limit)
+    # Render's free plan stops the API if it goes over 512 MB.
+    print(f"Memory used while starting: {peak_memory_mb():.0f} MB at most (Render's free plan has 512 MB)")
     yield
 
 
@@ -342,7 +366,16 @@ def cached_search(start, budget, mode="walk"):
 
 @lru_cache(maxsize=512)
 def cached_area(start, budget, mode="walk"):
-    return walking_area(walk_graph, start, cached_search(start, budget, mode), budget, SPEEDS[mode], land)
+    # Then Redis, which keeps areas while the API sleeps (shared_cache.py).
+    key = f"{mode}:{budget}:{start}"
+    if shared_cache is not None:
+        saved = shared_cache.get(key)
+        if saved is not None:
+            return saved
+    geometry = walking_area(walk_graph, start, cached_search(start, budget, mode), budget, SPEEDS[mode], land)
+    if shared_cache is not None:
+        shared_cache.set(key, geometry)
+    return geometry
 
 
 def finish(response, path, timer):
@@ -455,8 +488,10 @@ def area(
         raise HTTPException(status_code=422, detail=str(err))
     timer = StepTimer()
     start, _, budget, _ = plan_walk(request, "area", lat, lng, minutes, timer, mode)
+    hits_before = shared_cache.hits if shared_cache else 0
     geometry = cached_area(start, budget, mode)
-    timer.lap("area")
+    # Named so the log shows when an area came from Redis instead of being drawn.
+    timer.lap("area-from-redis" if shared_cache and shared_cache.hits > hits_before else "area")
     finish(response, "/api/area", timer)
     return {"area": geometry}
 

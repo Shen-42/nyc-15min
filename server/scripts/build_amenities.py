@@ -27,7 +27,7 @@ from walk_area import load_land  # noqa: E402
 
 import overpass  # noqa: E402  scripts/overpass.py: server choice and retries
 
-GRAPH_FILE = SERVER_DIR / "data" / "walk_graph.json"
+GRAPH_FILE = SERVER_DIR / "data" / "walk_graph.npz"
 LAND_FILE = SERVER_DIR / "data" / "manhattan-boundary.json"
 OUTPUT_FILE = SERVER_DIR / "data" / "amenities.json"
 # Park outlines (card 12). Nobody lives in a park, so the Manhattan grid

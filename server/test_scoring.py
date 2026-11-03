@@ -132,7 +132,7 @@ def test_unknown_hours_count_as_open():
 # On the real data. Skipped until the graph and places have been built.
 DATA = Path(__file__).parent / "data"
 needs_data = pytest.mark.skipif(
-    not ((DATA / "walk_graph.json").exists() and (DATA / "amenities.json").exists()),
+    not ((DATA / "walk_graph.npz").exists() and (DATA / "amenities.json").exists()),
     reason="run scripts/build_graph.py and scripts/build_amenities.py first",
 )
 
@@ -141,7 +141,7 @@ def score_at(lat, lng):
     from amenities import load_amenities, reachable_amenities
     from graph import WalkGraph
 
-    graph = WalkGraph.from_file(DATA / "walk_graph.json")
+    graph = WalkGraph.from_file(DATA / "walk_graph.npz")
     places = load_amenities(DATA / "amenities.json")
     start, _ = graph.nearest_node(lat, lng)
     return score_walk(reachable_amenities(places, graph.reachable_within(start, 15)))

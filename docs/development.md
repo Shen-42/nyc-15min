@@ -7,11 +7,11 @@ How to run, test, rebuild, and deploy the project.
 | Part | Tools |
 | --- | --- |
 | Front end | React 19, Vite, Leaflet with react-leaflet, Atkinson Hyperlegible font |
-| Back end | Python, FastAPI, Shapely, opening-hours-py |
+| Back end | Python, FastAPI, NumPy and scipy (the graph and its search), Shapely, opening-hours-py |
 | Data | OpenStreetMap via OSMnx and the Overpass API; NYC Open Data for curb ramps |
 | Map tiles | Stadia Maps, OSM Bright style |
 | Accounts | Supabase Auth (email and password) and Postgres, through the API |
-| Hosting | Render: a static site, a web service for the API, and Key Value (Redis) for rate limits and usage counts |
+| Hosting | Render: a static site, a web service for the API, and Key Value (Redis) for rate limits, usage counts, and saved walking areas |
 | Automation | GitHub Actions: tests on every push and pull request, Dependabot updates, monthly data refresh, Supabase keep-alive |
 | Tests | pytest (server), Vitest (site) |
 
@@ -31,7 +31,8 @@ client/                    React site
 server/                    FastAPI API
   main.py                  routes, caching, timing
   rate_limit.py            per-visitor rate limit, in Redis or memory
-  graph.py                 walking graph, grid index, Dijkstra
+  graph.py                 walking graph as NumPy arrays, nearest node, Dijkstra (scipy)
+  shared_cache.py          walking areas saved in Redis, so they outlive the API sleeping
   walk_area.py             builds the shaded walking area
   amenities.py             which places a walk reaches
   scoring.py               the 0–100 score, with custom weights
@@ -134,13 +135,13 @@ npm test
 The server tests cover:
 
 - Dijkstra on small made-up graphs, including the slower wheelchair speed and the extra minutes at corners without ramps
-- the grid index, checked against testing every node
+- the nearest-node index, checked against testing every node, and the search, checked against the original pure-Python Dijkstra on the Manhattan graph
 - the walking area: block interiors filled, nothing drawn over the Hudson, Harlem Meer, or the Reservoir
 - places and scoring, including custom weights, categories set to 0, and closed places
 - opening hours at different times and days
 - ranking a spot against the grid with different weights
 - the API routes, including bad `weights`, `at`, and `mode` values
-- the rate limit, with a stand-in for Redis
+- the rate limit and the shared area cache, with a stand-in for Redis
 - accounts: missing, forged, expired, and wrong-project tokens; people only seeing and deleting their own places; the two-tab profile conflict; deleting an account; each admin route refused to users; and the exact requests sent to Supabase, with a fake server in place of it
 - unexpected errors: a crashing route answers with a plain message and a request id, keeps its security headers, and leaks nothing; bad input comes back as one sentence
 
@@ -152,7 +153,7 @@ The site tests (Vitest, with jsdom standing in for the browser) cover the 70-sec
 
 - **nyc-15min-api**: the FastAPI server. 512 MB of memory and 0.1 CPU. It sleeps after 15 minutes without visits; the site shows "Waking up the server" while it starts again.
 - **nyc-15min**: the built React site, served as static files. Always on.
-- **nyc-15min-limits**: a free Key Value (Redis-compatible) instance for rate-limit counts, reachable only from the API.
+- **nyc-15min-limits**: a free Key Value (Redis-compatible) instance for rate-limit counts and saved walking areas, reachable only from the API. When its 25 MB fill up, it drops the least recently used keys.
 
 Set these in each service's **Environment** page:
 

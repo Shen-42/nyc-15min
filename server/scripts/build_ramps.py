@@ -27,9 +27,10 @@ from shapely.geometry import Point
 
 SERVER_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SERVER_DIR))
+from graph import WalkGraph  # noqa: E402
 from walk_area import load_land  # noqa: E402
 
-GRAPH_FILE = SERVER_DIR / "data" / "walk_graph.json"
+GRAPH_FILE = SERVER_DIR / "data" / "walk_graph.npz"
 LAND_FILE = SERVER_DIR / "data" / "manhattan-boundary.json"
 OUTPUT_FILE = SERVER_DIR / "data" / "ramps.json"
 
@@ -150,11 +151,11 @@ def download_ramps(column, land):
 
 
 def main():
-    graph = json.loads(GRAPH_FILE.read_text())
-    curbs = graph.get("curb_nodes")
+    graph = WalkGraph.from_file(GRAPH_FILE)
+    curbs = graph.curb_nodes
     if not curbs:
         sys.exit("The graph has no street corners yet. Run python scripts/build_graph.py first.")
-    coords = {node_id: (lat, lng) for node_id, lat, lng in graph["nodes"]}
+    coords = graph.coords
 
     land = load_land(LAND_FILE)
     column, updated = point_column()

@@ -33,7 +33,7 @@ def test_places_and_area_endpoints():
 
     import pytest
 
-    if not (Path(__file__).parent / "data" / "walk_graph.json").exists():
+    if not (Path(__file__).parent / "data" / "walk_graph.npz").exists():
         pytest.skip("run scripts/build_graph.py first")
     from main import rate_limiter
 
@@ -59,7 +59,7 @@ def test_places_takes_a_needs_profile():
 
     import pytest
 
-    if not (Path(__file__).parent / "data" / "walk_graph.json").exists():
+    if not (Path(__file__).parent / "data" / "walk_graph.npz").exists():
         pytest.skip("run scripts/build_graph.py first")
     from main import rate_limiter
 
@@ -87,7 +87,7 @@ def test_places_checks_opening_hours_at_a_time():
 
     import pytest
 
-    if not (Path(__file__).parent / "data" / "walk_graph.json").exists():
+    if not (Path(__file__).parent / "data" / "walk_graph.npz").exists():
         pytest.skip("run scripts/build_graph.py first")
     from main import rate_limiter
 
@@ -113,7 +113,7 @@ def test_wheelchair_mode_reaches_less_and_rejects_unknown_modes():
 
     import pytest
 
-    if not (Path(__file__).parent / "data" / "walk_graph.json").exists():
+    if not (Path(__file__).parent / "data" / "walk_graph.npz").exists():
         pytest.skip("run scripts/build_graph.py first")
     from main import rate_limiter
 
@@ -140,7 +140,7 @@ def test_grid_and_rank():
     import pytest
 
     data = Path(__file__).parent / "data"
-    if not (data / "walk_graph.json").exists() or not (data / "grid.json").exists():
+    if not (data / "walk_graph.npz").exists() or not (data / "grid.json").exists():
         pytest.skip("run scripts/build_graph.py and scripts/build_grid.py first")
     from main import rate_limiter
 
@@ -165,7 +165,7 @@ def test_clicks_in_a_park_are_turned_away():
     import pytest
 
     data = Path(__file__).parent / "data"
-    if not (data / "walk_graph.json").exists() or not (data / "parks.json").exists():
+    if not (data / "walk_graph.npz").exists() or not (data / "parks.json").exists():
         pytest.skip("run scripts/build_graph.py and scripts/build_amenities.py first")
     from main import rate_limiter
 
@@ -217,3 +217,35 @@ def test_fastapi_input_errors_are_one_readable_sentence():
 
     missing = client.get("/api/places", params={"lng": -73.98})
     assert missing.json()["detail"].startswith("Invalid lat:")
+
+
+# ---- Shared area cache (card 15) ----
+
+
+def test_areas_are_saved_to_redis_and_read_back():
+    from pathlib import Path
+
+    import pytest
+
+    import main
+    from shared_cache import SharedCache
+    from test_shared_cache import FakeRedis
+
+    if not (Path(__file__).parent / "data" / "walk_graph.npz").exists():
+        pytest.skip("run scripts/build_graph.py first")
+    main.rate_limiter.counter.clear()
+    with TestClient(app) as c:
+        saved = main.shared_cache
+        main.shared_cache = SharedCache(FakeRedis(), "test")
+        try:
+            main.cached_area.cache_clear()
+            first = c.get("/api/area", params={"lat": 40.758, "lng": -73.9855})
+            assert "area;" in first.headers["server-timing"]  # drawn
+            main.cached_area.cache_clear()  # as if the API had slept
+            second = c.get("/api/area", params={"lat": 40.758, "lng": -73.9855})
+            assert "area-from-redis;" in second.headers["server-timing"]
+            assert second.json() == first.json()
+        finally:
+            main.shared_cache = saved
+            main.cached_area.cache_clear()
+    main.rate_limiter.counter.clear()

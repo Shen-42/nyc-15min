@@ -10,7 +10,8 @@ one cell where a new place would put the most gap cells within 15 minutes.
 
 It writes data/grid.json. The monthly refresh job runs it after the
 downloads. It needs only the standard library, plus the server's own
-graph.py, amenities.py, and scoring.py. It takes under a minute.
+graph.py, amenities.py, and scoring.py (and so NumPy and scipy). It takes
+under a minute.
 """
 
 import json
@@ -198,9 +199,8 @@ def water_rings(water):
 
 def main():
     started = time.time()
-    graph_data = json.loads((DATA / "walk_graph.json").read_text())
-    graph = WalkGraph(graph_data["nodes"], graph_data["edges"])
-    corners = named_corners(graph, graph_data.get("streets", {}))
+    graph = WalkGraph.from_file(DATA / "walk_graph.npz")
+    corners = named_corners(graph, graph.streets)
     if not corners:
         print("No street names found, so spots are given as coordinates.")
         print("Run python scripts/build_ramps.py to add them.")
