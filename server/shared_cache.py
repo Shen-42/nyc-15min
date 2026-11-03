@@ -33,7 +33,7 @@ class SharedCache:
         self.version = version
         self.hits = 0
         self.misses = 0
-        self._last_warning = 0
+        self._last_warning = None  # when the last Redis failure was printed
 
     def _key(self, key):
         return f"area:{self.version}:{key}"
@@ -59,8 +59,10 @@ class SharedCache:
             self._warn(err)
 
     def _warn(self, err):
+        # time.monotonic() counts from when the machine started, which can be
+        # under a minute ago on a fresh server, so the first failure is always printed.
         now = time.monotonic()
-        if now - self._last_warning >= WARN_EVERY_S:
+        if self._last_warning is None or now - self._last_warning >= WARN_EVERY_S:
             self._last_warning = now
             print(f"Shared area cache unavailable, drawing areas again: {err}")
 
