@@ -44,7 +44,8 @@ jobs:
       - name: Download and measure
         run: |
           set -o pipefail
-          python scripts/measure_five_boroughs.py 2>&1 | tee "$RUNNER_TEMP/out.txt"
+          # -u: print each line right away, so the log stays in order.
+          python -u scripts/measure_five_boroughs.py 2>&1 | tee "$RUNNER_TEMP/out.txt"
 
       - name: Write the results to the summary
         if: always()
