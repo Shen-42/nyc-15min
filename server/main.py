@@ -20,11 +20,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+import shapely
 from shapely.geometry import Point
 from shapely.ops import unary_union
 
 import accounts
-from amenities import load_amenities, reachable_amenities
+from amenities import PlaceIndex, load_amenities, reachable_amenities
 from graph import WalkGraph
 from grid import Grid
 from hours import parse_at, status_at
@@ -33,10 +34,9 @@ from rate_limit import RateLimited, RateLimiter, make_counter
 from scoring import parse_weights, score_walk, settings_with_weights
 from shared_cache import make_shared_cache
 from usage import make_usage
-from walk_area import load_land, load_parks, load_water, walking_area
+from walk_area import Outlines, load_boroughs, load_parks, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.npz"
-LAND_FILE = Path(__file__).parent / "data" / "manhattan-boundary.json"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
 AMENITIES_FILE = Path(__file__).parent / "data" / "amenities.json"
 RAMPS_FILE = Path(__file__).parent / "data" / "ramps.json"
@@ -49,15 +49,18 @@ MAX_START_GAP_M = 150
 
 # Loaded once when the server starts. None if the file hasn't been built yet.
 walk_graph = None
-# Manhattan's shoreline minus lakes and ponds, for trimming walking areas.
-# None if the boundary file is missing.
+# Each borough's land, to say which one a spot is in (card 15).
+boroughs = Outlines([])
+# The five boroughs' shoreline minus lakes and ponds, for trimming walking areas.
 land = None
-# Lakes and ponds as (name, shape), for turning away clicks on water.
-water = []
-# Parks as (name, shape), for turning away clicks in a park: nobody lives there.
-parks = []
+# Lakes and ponds, for turning away clicks on water.
+water = Outlines([])
+# Parks, for turning away clicks in a park: nobody lives there.
+parks = Outlines([])
 # Groceries, pharmacies, clinics, parks, schools, and subway stations.
 amenities = []
+# The same places, indexed for matching against a walk (amenities.py).
+places_index = PlaceIndex([])
 # The same places by id, for looking up opening hours.
 amenity_by_id = {}
 # Street corners with no curb ramp, and the extra minutes each costs in a
@@ -86,28 +89,32 @@ def peak_memory_mb():
 
 @asynccontextmanager
 async def lifespan(app):
-    global walk_graph, land, water, parks, amenities, amenity_by_id, ramp_penalty, grid, shared_cache
+    global walk_graph, boroughs, land, water, parks, amenities, places_index, amenity_by_id, ramp_penalty, grid, shared_cache
     if AMENITIES_FILE.exists():
         amenities = load_amenities(AMENITIES_FILE)
+        places_index = PlaceIndex(amenities)
+        for place in amenities:
+            del place["nodes"]  # now in the index's arrays; no need to hold them twice
         amenity_by_id = {a["id"]: a for a in amenities}
         with_hours = sum(1 for a in amenities if a.get("hours"))
         print(f"Loaded {len(amenities):,} places ({with_hours:,} with opening hours)")
     else:
         print(f"No places file at {AMENITIES_FILE}. Run: python scripts/build_amenities.py")
     if WATER_FILE.exists():
-        water = load_water(WATER_FILE)
+        water = Outlines(load_water(WATER_FILE))
         print(f"Loaded {len(water)} lakes and ponds")
     else:
         print(f"No water file at {WATER_FILE}. Run: python scripts/build_water.py")
     if PARKS_FILE.exists():
-        parks = load_parks(PARKS_FILE)
+        parks = Outlines(load_parks(PARKS_FILE))
         print(f"Loaded {len(parks)} parks")
     else:
         print(f"No parks file at {PARKS_FILE}. Run: python scripts/build_amenities.py")
-    if LAND_FILE.exists():
-        land = load_land(LAND_FILE)
-        if water:
-            land = land.difference(unary_union([shape for _, shape in water]))
+    by_name = load_boroughs()
+    boroughs = Outlines(list(by_name.items()))
+    land = shapely.make_valid(unary_union(list(by_name.values())))
+    if len(water):
+        land = land.difference(unary_union([shape for _, shape in water]))
     if RAMPS_FILE.exists():
         ramp_penalty = {n: NO_RAMP_PENALTY_MIN for n in load_no_ramp_nodes(RAMPS_FILE)}
         print(f"Loaded {len(ramp_penalty):,} corners with no curb ramp")
@@ -261,8 +268,8 @@ def graph_info():
 
 @app.get("/api/nearest-node")
 def nearest_node(
-    lat: float = Query(..., ge=40.6, le=40.95),
-    lng: float = Query(..., ge=-74.1, le=-73.85),
+    lat: float = Query(..., ge=40.47, le=40.93),
+    lng: float = Query(..., ge=-74.27, le=-73.68),
 ):
     """The graph node closest to a clicked point. Card 4 starts its search here."""
     graph = require_graph()
@@ -320,17 +327,15 @@ def plan_walk(request, kind, lat, lng, minutes, timer, mode="walk"):
     graph = require_graph()
 
     clicked = Point(lng, lat)  # shapely uses (x, y) = (lng, lat)
-    for name, shape in water:
-        if shape.contains(clicked):
-            where = name or "the water"
-            raise HTTPException(status_code=422, detail=f"That spot is in {where}. Choose a spot on land.")
-    for name, shape in parks:
-        if shape.contains(clicked):
-            where = name or "a park"
-            raise HTTPException(
-                status_code=422,
-                detail=f"That spot is in {where}. Choose a spot on a nearby street.",
-            )
+    in_water, name = water.find(clicked)
+    if in_water:
+        raise HTTPException(status_code=422, detail=f"That spot is in {name or 'the water'}. Choose a spot on land.")
+    in_park, name = parks.find(clicked)
+    if in_park:
+        raise HTTPException(
+            status_code=422,
+            detail=f"That spot is in {name or 'a park'}. Choose a spot on a nearby street.",
+        )
 
     start, gap_m = graph.nearest_node(lat, lng)
     timer.lap("nearest")
@@ -386,8 +391,9 @@ def finish(response, path, timer):
     response.headers["Server-Timing"] = timer.header()
 
 
-Lat = Query(..., ge=40.6, le=40.95)
-Lng = Query(..., ge=-74.1, le=-73.85)
+# A box around the five boroughs (card 15).
+Lat = Query(..., ge=40.47, le=40.93)
+Lng = Query(..., ge=-74.27, le=-73.68)
 Minutes = Query(15, gt=0, le=30)
 # A needs profile (card 9), e.g. "grocery:3,park:3,school:0". Each weight is
 # 0 (not needed) to 3 (essential); categories left out keep their defaults.
@@ -424,15 +430,17 @@ def places(
         raise HTTPException(status_code=422, detail=str(err))
     timer = StepTimer()
     start, gap_m, budget, times = plan_walk(request, "places", lat, lng, minutes, timer, mode)
-    reached = reachable_amenities(amenities, times, minutes - budget)
+    reached = reachable_amenities(places_index, times, minutes - budget)
     if at_time:
         for place in reached:
             place["status"] = status_at(amenity_by_id[place["id"]], at_time)
         timer.lap("hours")
     score = score_walk(reached, settings)
+    _, borough = boroughs.find(Point(lng, lat))  # None just off the shore
     # How this spot compares with the rest of Manhattan (card 12). The grid
-    # was scored walking at any time, so the rank is only given for those.
-    if grid is not None and mode == "walk" and at_time is None and minutes == 15:
+    # was scored walking at any time, so the rank is only given for those,
+    # and it only covers Manhattan so far.
+    if grid is not None and mode == "walk" and at_time is None and minutes == 15 and borough == "Manhattan":
         score["rank"] = grid.rank(score["score"], settings)
     else:
         score["rank"] = None
@@ -444,6 +452,7 @@ def places(
         "minutes": minutes,
         "at": at,
         "mode": mode,
+        "borough": borough,
         "amenities": reached,  # closest first; with "status" when a time was given
         "barriers": barriers_reached(times, minutes - budget) if mode == "wheelchair" else [],
         "score": score,

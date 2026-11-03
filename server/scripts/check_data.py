@@ -23,11 +23,11 @@ MAX_DROP = 0.15
 
 # Hard floors, whatever the previous counts were.
 FLOORS = {
-    "graph nodes": 30_000,
-    "graph segments": 45_000,
-    "subway stations": 140,  # Manhattan has about 150
-    "lakes and ponds": 8,
-    "grid cells": 5_000,  # about 5,450 cells of 100 m on land
+    "graph nodes": 300_000,  # about 344,000 for the five boroughs (Nov 2026)
+    "graph segments": 450_000,  # about 532,000
+    "subway stations": 350,  # the city has 472 stations; OpenStreetMap maps most as one
+    "lakes and ponds": 30,
+    "grid cells": 5_000,  # Manhattan only for now: about 5,450 cells of 100 m on land
 }
 
 LABELS = {

@@ -44,6 +44,7 @@ def test_places_and_area_endpoints():
         assert places.status_code == 200
         assert 0 <= places.json()["score"]["score"] <= 100
         assert places.json()["amenities"]
+        assert places.json()["borough"] == "Manhattan"  # card 15
 
         area = c.get("/api/area", params={"lat": 40.758, "lng": -73.9855})
         assert area.status_code == 200

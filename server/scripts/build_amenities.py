@@ -1,44 +1,40 @@
 """Download the places people walk to, and attach each one to the walking graph (card 5).
 
-Run once from the server folder, with the virtual environment active:
+Run once from the server folder, with the virtual environment active, after
+scripts/build_graph.py:
     python scripts/build_amenities.py
 
-It writes data/amenities.json. Each category is a separate Overpass request,
-and OSMnx caches each answer in ./cache, so if one request fails you can run
-the script again and only the missing ones are downloaded.
+It writes data/amenities.json and data/parks.json. Every category comes from
+one download for the whole city (scripts/osm_places.py), and OSMnx caches
+each piece of it in ./cache, so if a piece fails you can run the script
+again and only the missing ones are downloaded.
 """
 
 import json
 import math
 import sys
-import time
 from collections import Counter
 from pathlib import Path
 
-import osmnx as ox
 import shapely
 from shapely import STRtree
-from shapely.geometry import Point
 
 SERVER_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SERVER_DIR))
 from graph import WalkGraph  # noqa: E402
 from walk_area import load_land  # noqa: E402
 
+import osm_places  # noqa: E402  scripts/osm_places.py: the one download
 import overpass  # noqa: E402  scripts/overpass.py: server choice and retries
+from osm_places import has_tag, text  # noqa: E402
 
 GRAPH_FILE = SERVER_DIR / "data" / "walk_graph.npz"
-LAND_FILE = SERVER_DIR / "data" / "manhattan-boundary.json"
 OUTPUT_FILE = SERVER_DIR / "data" / "amenities.json"
-# Park outlines (card 12). Nobody lives in a park, so the Manhattan grid
+# Park outlines (card 12). Nobody lives in a park, so the grid
 # leaves them out of gaps and ranks, and the heat map leaves them blank.
 PARKS_FILE = SERVER_DIR / "data" / "parks.json"
 # Outlines are simplified to about this many meters, to keep the file small.
 PARK_SIMPLIFY_M = 5
-
-
-def text(value):
-    return value if isinstance(value, str) else None
 
 
 def is_subway(row):
@@ -59,9 +55,6 @@ CATEGORIES = {
     "subway": {"tags": {"railway": "station"}, "keep": is_subway},
 }
 
-# Seconds to wait between the six category downloads.
-PAUSE_BETWEEN_S = 10
-
 # Parks smaller than this are traffic islands and sitting areas, not parks.
 MIN_PARK_M2 = 1_000
 
@@ -74,6 +67,7 @@ MAX_SNAP_M = 150
 EDGE_M = 20
 
 # Work in meters around Manhattan's middle so distances are real distances.
+# Across the city that's off by under 1%, which only matters for the edge widths.
 LAT0, LNG0 = 40.78, -73.97
 M_PER_DEG_LAT = 110_540
 M_PER_DEG_LNG = 111_320 * math.cos(math.radians(LAT0))
@@ -89,40 +83,46 @@ def to_meters(geom):
     return shapely.transform(geom, f)
 
 
+def matches(row, spec):
+    """Does a downloaded feature belong to this category?"""
+    if not any(has_tag(row, key, values) for key, values in spec["tags"].items()):
+        return False
+    keep = spec.get("keep")
+    return keep(row) if keep else True
+
+
 def main():
     overpass.configure()
 
-    land = load_land(LAND_FILE)
-    west, south, east, north = land.bounds
+    land = load_land()
 
     # A spatial index over every graph node, for fast nearest-node lookups.
     graph = WalkGraph.from_file(GRAPH_FILE)
-    node_ids = list(graph.coords)
-    node_points = [to_meters(Point(lng, lat)) for lat, lng in graph.coords.values()]
+    node_ids = graph.ids.tolist()
+    node_points = shapely.points((graph.lng - LNG0) * M_PER_DEG_LNG, (graph.lat - LAT0) * M_PER_DEG_LAT)
     tree = STRtree(node_points)
 
     def nearest_node(point_m):
         idx, dist = tree.query_nearest(point_m, max_distance=MAX_SNAP_M, return_distance=True)
         return (node_ids[idx[0]], float(dist[0])) if len(idx) else (None, None)
 
+    print("Downloading places for the whole city...")
+    features = osm_places.download(land)
+    print(f"Downloaded {len(features):,} features")
+
     amenities = []
     park_outlines = []
     for category, spec in CATEGORIES.items():
-        print(f"\n--- {category} ---")
-        if category != next(iter(CATEGORIES)):
-            time.sleep(PAUSE_BETWEEN_S)  # be gentle with the shared server
-        features = overpass.download(category, lambda: ox.features_from_bbox((west, south, east, north), tags=spec["tags"]))
-        keep = spec.get("keep")
         kept = 0
         for (element, osm_id), row in features.iterrows():
-            if keep and not keep(row):
+            if not matches(row, spec):
                 continue
             geom = row.geometry
             if geom.geom_type not in ("Point", "Polygon", "MultiPolygon"):
                 continue
             spot = geom if geom.geom_type == "Point" else geom.representative_point()
             if not land.contains(spot):
-                continue  # in New Jersey, Queens, or the Bronx
+                continue  # in New Jersey, Westchester, or Nassau County
 
             if geom.geom_type == "Point":
                 node, _ = nearest_node(to_meters(spot))
@@ -164,7 +164,7 @@ def main():
             if hours:
                 amenities[-1]["hours"] = hours
             kept += 1
-        print(f"Kept {kept} {category} places in Manhattan")
+        print(f"Kept {kept:,} {category} places")
 
     OUTPUT_FILE.write_text(json.dumps(amenities, separators=(",", ":")))
     PARKS_FILE.write_text(json.dumps(park_outlines, separators=(",", ":")))

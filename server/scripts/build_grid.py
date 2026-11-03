@@ -25,7 +25,7 @@ from pathlib import Path
 
 SERVER_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SERVER_DIR))
-from amenities import load_amenities, reachable_amenities  # noqa: E402
+from amenities import PlaceIndex, load_amenities, reachable_amenities  # noqa: E402
 from graph import WALK_SPEED_M_PER_MIN, WalkGraph, distance_m  # noqa: E402
 from scoring import CATEGORY_SETTINGS, score_walk  # noqa: E402
 
@@ -205,7 +205,9 @@ def main():
         print("No street names found, so spots are given as coordinates.")
         print("Run python scripts/build_ramps.py to add them.")
     amenities = load_amenities(DATA / "amenities.json")
-    boundary = json.loads((DATA / "manhattan-boundary.json").read_text())
+    places = PlaceIndex(amenities)
+    # Manhattan only, for now. The whole city's grid comes with card 15's client work.
+    boundary = json.loads((SERVER_DIR / "geo" / "manhattan-boundary.json").read_text())
     land = [boundary[name] for name in LAND]
     water = water_polygons()
 
@@ -233,7 +235,7 @@ def main():
     keep = {}  # cell index -> position in `cells`
     for n, (i, node, budget) in enumerate(snapped):
         times = graph.reachable_within(node, budget)
-        result = score_walk(reachable_amenities(amenities, times, MINUTES - budget))
+        result = score_walk(reachable_amenities(places, times, MINUTES - budget))
         by_category = {c["category"]: c for c in result["categories"]}
         lat, lng = points[i]
         keep[i] = len(cells)

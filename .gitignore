@@ -8,9 +8,12 @@ __pycache__/
 .venv/
 .pytest_cache/
 
-# OSMnx download cache. The built graph in server/data/ IS committed,
-# so teammates and the deployed server don't have to rebuild it.
+# OSMnx download cache.
 cache/
+
+# Map data. It's in a GitHub release named in server/data-release.json;
+# run python scripts/get_data.py in server/ to download it (card 15).
+server/data/
 
 # Editor and OS
 .vscode/

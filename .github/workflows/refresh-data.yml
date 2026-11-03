@@ -1,7 +1,9 @@
-# Monthly data refresh (card 8).
-# Re-downloads Manhattan's streets, lakes, and places from OpenStreetMap,
-# checks that nothing shrank suspiciously, runs the tests, and commits the
-# new data. The commit makes Render redeploy the API with it.
+# Monthly data refresh (cards 8 and 15).
+# Re-downloads the five boroughs' streets, lakes, places, and curb ramps,
+# checks that nothing shrank suspiciously, and runs the tests. Then it
+# uploads the data to a GitHub release and commits server/data-release.json,
+# which names that release. The commit makes Render redeploy the API, and
+# its build downloads the new data (server/scripts/get_data.py).
 # Run it by hand from the repo's Actions tab: "Refresh map data" > "Run workflow".
 name: Refresh map data
 
@@ -11,13 +13,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # to commit the new data
+  contents: write # to create the release and commit data-release.json
 
 jobs:
   refresh:
     # Pinned so the move of ubuntu-latest to Ubuntu 26 can't change things unexpectedly.
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    # The city's walking graph takes about 2 hours from public Overpass
+    # servers. GitHub stops a job at 6 hours.
+    timeout-minutes: 330
     defaults:
       run:
         working-directory: server
@@ -26,6 +30,7 @@ jobs:
       # NextGIS server with a free key first. Empty means the public defaults
       # in server/scripts/overpass.py.
       OVERPASS_URLS: ${{ secrets.OVERPASS_URLS }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
 
@@ -38,8 +43,20 @@ jobs:
       - name: Install
         run: pip install -r requirements.txt -r requirements-build.txt
 
+      - name: Get the current data
+        run: python scripts/get_data.py
+
       - name: Save current counts
         run: python scripts/check_data.py --snapshot "$RUNNER_TEMP/before.json"
+
+      # Overpass answers saved by an earlier try of this same run, so
+      # "Re-run failed jobs" picks up where it stopped instead of starting over.
+      - name: Restore this run's downloads
+        uses: actions/cache/restore@v4
+        with:
+          path: server/cache
+          key: overpass-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: overpass-${{ github.run_id }}-
 
       # Public Overpass servers are often busy. Each request retries with
       # growing waits and alternates servers (see server/scripts/overpass.py).
@@ -49,15 +66,23 @@ jobs:
       - name: Download lakes and ponds
         run: python scripts/build_water.py
 
+      # Same download as the lakes (scripts/osm_places.py), so mostly from the cache.
       - name: Download places
         run: python scripts/build_amenities.py
+
+      - name: Save this run's downloads
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: server/cache
+          key: overpass-${{ github.run_id }}-${{ github.run_attempt }}
 
       # NYC Open Data, not Overpass. Needs the new graph's street corners.
       - name: Download curb ramps
         run: python scripts/build_ramps.py
 
       # The background job for card 12: score every 100 m of Manhattan with
-      # the new data and find the gaps. Under a minute; no downloads.
+      # the new data and find the gaps. No downloads.
       - name: Score the Manhattan grid
         run: python scripts/build_grid.py
 
@@ -67,18 +92,40 @@ jobs:
       - name: Run tests
         run: pytest
 
-      - name: Commit new data
+      - name: Publish the data and commit data-release.json
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/
-          if git diff --cached --quiet; then
+          TAG="data-$(date -u +%Y-%m-%d)-${{ github.run_number }}"
+          python scripts/get_data.py --pin "$TAG"
+          FILES=$(python -c 'import sys; sys.path.insert(0, "scripts"); import get_data; print(" ".join("data/" + f for f in get_data.FILES))')
+
+          # Same fingerprints as the data already in use: nothing to publish.
+          if git show HEAD:server/data-release.json > "$RUNNER_TEMP/old.json" 2>/dev/null \
+             && [ "$(jq -S .files "$RUNNER_TEMP/old.json")" = "$(jq -S .files data-release.json)" ]; then
+            git checkout data-release.json
             echo "Nothing changed." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          git commit -m "Monthly data refresh $(date -u +%Y-%m-%d)"
+
+          gh release create "$TAG" $FILES \
+            --title "Map data $(date -u +%Y-%m-%d)" \
+            --notes "Built by run ${{ github.run_number }} of the Refresh map data workflow. Download with server/scripts/get_data.py."
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The data lives in releases now; stop tracking any copies still in git.
+          git rm -r --cached --quiet --ignore-unmatch data
+          git add data-release.json
+          git commit -m "Monthly data refresh $(date -u +%Y-%m-%d): use release $TAG"
           # Someone may have pushed to main while this job ran. Put this
-          # commit on top of theirs; it only touches server/data/.
+          # commit on top of theirs; it only touches server/data-release.json.
           git pull --rebase origin main
           git push
-          echo "Committed new data. Render will redeploy the API." >> "$GITHUB_STEP_SUMMARY"
+          echo "Published release $TAG and committed data-release.json. Render will redeploy the API." >> "$GITHUB_STEP_SUMMARY"
+
+      # Keep the three newest data releases (about 150 MB); older ones only
+      # matter for going back, and git history still says what they were.
+      - name: Delete old data releases
+        run: |
+          gh release list --limit 100 --json tagName --jq '.[].tagName' \
+            | grep '^data-' | tail -n +4 \
+            | xargs -r -n 1 gh release delete --cleanup-tag --yes

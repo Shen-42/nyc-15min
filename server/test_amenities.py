@@ -48,8 +48,9 @@ def test_every_category_has_places(data):
     counts = Counter(a["category"] for a in amenities)
     for category in CATEGORIES:
         assert counts[category] > 10, f"only {counts[category]} {category} places"
-    # Manhattan has about 150 subway stations. Allow for how OSM splits big complexes.
-    assert 80 <= counts["subway"] <= 250
+    # Manhattan has about 150 subway stations and the city 472. Allow for how
+    # OSM splits big complexes, and for either data set (card 15).
+    assert 80 <= counts["subway"] <= 700
 
 
 @needs_data
@@ -68,3 +69,25 @@ def test_central_park_is_right_across_fifth_avenue(data):
     reached = reachable_amenities(amenities, graph.reachable_within(start, 15))
     central_park = [p for p in reached if p["name"] == "Central Park"]
     assert central_park and central_park[0]["minutes"] < 3
+
+
+@needs_data
+def test_index_matches_checking_every_place_on_real_searches(data):
+    """PlaceIndex (card 15) gives the same answer as the plain loop it replaced."""
+    import random
+
+    from amenities import PlaceIndex
+
+    graph, amenities = data
+    index = PlaceIndex(amenities)
+    random.seed(4)
+    for _ in range(25):
+        start = graph.ids[random.randrange(len(graph))].item()
+        times = graph.reachable_within(start, 15)
+        expected = []
+        for place in amenities:
+            best = min((times[n] for n in place["nodes"] if n in times), default=None)
+            if best is not None:
+                expected.append({k: place[k] for k in ("id", "category", "name", "lat", "lng")} | {"minutes": round(best + 0.4, 1)})
+        expected.sort(key=lambda p: p["minutes"])
+        assert index.reachable(times, 0.4) == expected

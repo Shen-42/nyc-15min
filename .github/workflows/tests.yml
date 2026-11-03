@@ -28,6 +28,8 @@ jobs:
           cache: pip
           cache-dependency-path: server/requirements*.txt
       - run: pip install -r requirements.txt
+      # The map data is in a GitHub release, not in git (card 15).
+      - run: python scripts/get_data.py
       - run: pytest
 
   client:

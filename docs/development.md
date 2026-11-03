@@ -42,8 +42,11 @@ server/                    FastAPI API
   accounts.py              sign-in checks, saved places, profiles, roles, admin routes
   auth.py, store.py        checking Supabase tokens; reading and writing the tables
   usage.py                 daily request counts for the admin page
-  scripts/                 downloads (graph, water, places, curb ramps), the grid, and the data check
-  data/                    the downloaded data (committed)
+  scripts/                 downloads (graph, water, places, curb ramps), the grid, the data check,
+                           and get_data.py, which fetches the data release
+  geo/                     the five boroughs' land, and Manhattan's outline for the grid (committed)
+  data/                    the map data, from a GitHub release (not in git)
+  data-release.json        which release the map data comes from, with each file's fingerprint
   test_*.py                tests
 supabase/schema.sql        the account tables, to paste into Supabase's SQL editor
 render.yaml                Render setup for all three services
@@ -63,8 +66,11 @@ cd server
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+python scripts/get_data.py       # the map data, about 50 MB (see "Rebuild the data")
 uvicorn main:app --reload --port 8000
 ```
+
+After pulling changes, run `python scripts/get_data.py` again: it downloads only the files that changed.
 
 Check it at http://localhost:8000/api/health. The interactive API docs are at http://localhost:8000/docs (turned off on Render).
 
@@ -94,7 +100,9 @@ Open http://localhost:5173. In development, Vite forwards requests that start wi
 
 ## Rebuild the data
 
-The data in `server/data/` is committed. A GitHub Actions job (`.github/workflows/refresh-data.yml`) rebuilds it on the 1st of every month: it downloads everything again (OpenStreetMap from Overpass, curb ramps from NYC Open Data), checks that no count dropped by more than 15% (`server/scripts/check_data.py`), runs the tests, scores the Manhattan grid again, and commits the new data, which makes Render redeploy. Run it by hand from the repo's **Actions** tab under **Refresh map data**. Its results table is on the run's summary page.
+The map data for the five boroughs is about 50 MB and replaced every month, so it isn't kept in git. It's in the repo's GitHub releases, and `server/data-release.json`, which is in git, names the release in use and each file's SHA-256 fingerprint. `server/scripts/get_data.py` downloads the files that are missing or different and checks each one; Render's build, the test job, and local setup all run it.
+
+A GitHub Actions job (`.github/workflows/refresh-data.yml`) rebuilds the data on the 1st of every month: it downloads everything again (OpenStreetMap from Overpass, curb ramps from NYC Open Data), checks that no count dropped by more than 15% (`server/scripts/check_data.py`), runs the tests, and scores the Manhattan grid again. Then it uploads the files as a new release (`data-YYYY-MM-DD-N`), commits `data-release.json` naming it, which makes Render redeploy, and deletes all but the three newest data releases. It takes about 2.5 hours, mostly waiting for Overpass. Run it by hand from the repo's **Actions** tab under **Refresh map data**. If it fails partway, **Re-run failed jobs** reuses the pieces it already downloaded. Its results table is on the run's summary page.
 
 To rebuild by hand:
 
@@ -102,20 +110,20 @@ To rebuild by hand:
 cd server
 source .venv/bin/activate
 pip install -r requirements-build.txt
-python scripts/build_graph.py      # walking network
+python scripts/build_graph.py      # walking network (about 2 hours)
 python scripts/build_water.py      # lakes and ponds
 python scripts/build_amenities.py  # places and park outlines
 python scripts/build_ramps.py      # curb ramps from NYC Open Data (after build_graph.py)
 python scripts/build_grid.py       # score every 100 m of Manhattan (after all the others)
 ```
 
-Public Overpass servers are often busy. Each download retries up to six times with growing waits (30 s to 5 minutes), alternating between two servers (`server/scripts/overpass.py`). Finished downloads are cached in `server/cache/`, so a script that fails partway can be run again. If the default servers are blocked where you are, choose another:
+The city is downloaded in pieces of at most 50 km², about 25 requests for the streets and 25 for places and lakes, which `build_water.py` and `build_amenities.py` share (`server/scripts/osm_places.py`). Public Overpass servers are often busy. Each download retries up to 20 times with growing waits (30 s to 5 minutes), alternating between servers (`server/scripts/overpass.py`). Finished pieces are cached in `server/cache/`, whichever server sent them, so a script that fails partway can be run again. Running this on a slow or unsteady connection can take many hours; the GitHub Actions job is the easier way. If the default servers are blocked where you are, choose another:
 
 ```bash
 OVERPASS_URL=https://overpass.kumi.systems/api python scripts/build_water.py
 ```
 
-`server/data/manhattan-boundary.json` is a copy of `client/src/data/manhattan-boundary.json`. If you change one, copy it over.
+The land of the five boroughs, cut to the shoreline, is in `server/geo/boroughs.json`, made by `server/scripts/make_boroughs.py` from the Department of City Planning's borough boundaries. It's in git, since it barely changes. `server/geo/manhattan-boundary.json` is a copy of `client/src/data/manhattan-boundary.json`, used by the Manhattan grid. If you change one, copy it over.
 
 ## Tests
 
@@ -151,7 +159,7 @@ The site tests (Vitest, with jsdom standing in for the browser) cover the 70-sec
 
 `render.yaml` defines three services, created together in the Render dashboard under **New > Blueprint**:
 
-- **nyc-15min-api**: the FastAPI server. 512 MB of memory and 0.1 CPU. It sleeps after 15 minutes without visits; the site shows "Waking up the server" while it starts again.
+- **nyc-15min-api**: the FastAPI server. 512 MB of memory and 0.1 CPU. Its build downloads the map data release named in `server/data-release.json`. It sleeps after 15 minutes without visits; the site shows "Waking up the server" while it starts again.
 - **nyc-15min**: the built React site, served as static files. Always on.
 - **nyc-15min-limits**: a free Key Value (Redis-compatible) instance for rate-limit counts and saved walking areas, reachable only from the API. When its 25 MB fill up, it drops the least recently used keys.
 

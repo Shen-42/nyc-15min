@@ -3,7 +3,7 @@
 Every street segment the search reached is drawn as a line, and each line is
 widened by BUFFER_M on both sides. Joined together, they cover the streets
 you can walk on plus the buildings along them. The result is then trimmed to
-Manhattan's shoreline with lakes and ponds cut out, so it never covers water.
+the city's shoreline with lakes and ponds cut out, so it never covers water.
 """
 
 import json
@@ -11,6 +11,7 @@ import math
 from pathlib import Path
 
 import shapely
+from shapely import STRtree
 from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box, mapping, shape
 from shapely.ops import unary_union
 
@@ -27,21 +28,49 @@ QUAD_SEGS = 2
 
 M_PER_DEG_LAT = 110_540
 
-# Pieces of land in manhattan-boundary.json to trim the area to. Same as
-# LAND in scripts/build_graph.py and MANHATTAN_POLYGONS on the client.
-LAND = ["main", "roosevelt"]
+# The land of the five boroughs (card 15), made by scripts/make_boroughs.py.
+BOROUGHS_FILE = Path(__file__).parent / "geo" / "boroughs.json"
 
 
-def load_land(path):
-    """Manhattan's shoreline as one shape in (lng, lat), for trimming the area.
-
-    server/data/manhattan-boundary.json is a copy of
-    client/src/data/manhattan-boundary.json. If you change one, copy it over.
-    """
+def load_boroughs(path=BOROUGHS_FILE):
+    """{borough name: its land as one shape in (lng, lat)}."""
     data = json.loads(Path(path).read_text())
-    polygons = [Polygon([(lng, lat) for lat, lng in data[name]]) for name in LAND]
-    # make_valid fixes any tiny self-crossings left by simplifying the outline.
-    return shapely.make_valid(unary_union(polygons))
+    return {
+        # make_valid fixes the tiny self-crossings left by simplifying the
+        # outline. It has to run on each ring before they're joined: joining
+        # fails on a ring that crosses itself.
+        name: unary_union([shapely.make_valid(Polygon([(lng, lat) for lat, lng in ring])) for ring in rings])
+        for name, rings in data["boroughs"].items()
+    }
+
+
+def load_land(path=BOROUGHS_FILE):
+    """All five boroughs' land as one shape in (lng, lat), for trimming the area."""
+    return shapely.make_valid(unary_union(list(load_boroughs(path).values())))
+
+
+class Outlines:
+    """Named shapes (lakes, parks) with a spatial index, to find quickly
+    which one, if any, a point is in. The city has thousands; checking each
+    one in turn would slow every click."""
+
+    def __init__(self, items):
+        self.names = [name for name, _ in items]
+        self.shapes = [shape for _, shape in items]
+        self.tree = STRtree(self.shapes)
+
+    def __len__(self):
+        return len(self.shapes)
+
+    def __iter__(self):
+        return iter(zip(self.names, self.shapes))
+
+    def find(self, point):
+        """(True, name or None) for the first shape containing the point, else (False, None)."""
+        for i in sorted(self.tree.query(point, predicate="intersects")):
+            if self.shapes[i].contains(point):
+                return True, self.names[i]
+        return False, None
 
 
 def load_parks(path):
@@ -55,7 +84,7 @@ def load_parks(path):
 
 
 def load_water(path):
-    """Lakes and ponds inside Manhattan as a list of (name or None, shape in (lng, lat))."""
+    """Lakes and ponds in the city as a list of (name or None, shape in (lng, lat))."""
     items = json.loads(Path(path).read_text())
     return [(w["name"], shapely.make_valid(shape(w["geometry"]))) for w in items]
 
@@ -65,7 +94,7 @@ def walking_area(graph, start, times, max_minutes, speed_m_per_min, land=None):
 
     times: {node_id: minutes} from WalkGraph.reachable_within.
     land: if given, the area is trimmed to it, so the 40 m widening along a
-    path by a river or lake doesn't spill over the water. Pass Manhattan's
+    path by a river or lake doesn't spill over the water. Pass the city's
     shoreline with lakes and ponds already cut out.
     """
     # Work in meters around the start point, so buffering by 40 means 40 m.

@@ -5,15 +5,14 @@ from shapely.geometry import Point, shape
 from shapely.ops import unary_union
 
 from graph import WALK_SPEED_M_PER_MIN, WalkGraph
-from walk_area import cut_path, load_land, load_water, walking_area
+from walk_area import Outlines, cut_path, load_boroughs, load_land, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.npz"
-LAND_FILE = Path(__file__).parent / "data" / "manhattan-boundary.json"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
 needs_water = pytest.mark.skipif(not WATER_FILE.exists(), reason="run scripts/build_water.py first")
 
 # The same trimming shape the server uses: shoreline minus lakes and ponds.
-LAND = load_land(LAND_FILE)
+LAND = load_land()
 if WATER_FILE.exists():
     LAND = LAND.difference(unary_union([s for _, s in load_water(WATER_FILE)]))
 needs_graph = pytest.mark.skipif(not GRAPH_FILE.exists(), reason="run scripts/build_graph.py first")
@@ -109,3 +108,38 @@ def test_harlem_meer_is_not_covered(manhattan):
 def test_lawns_are_filled(manhattan):
     area = area_from(manhattan, 40.7788, -73.9665)  # Great Lawn, east path
     assert contains(area, 40.7812, -73.9665)  # middle of the Great Lawn
+
+
+# ---- The five boroughs (card 15) ----
+
+BOROUGH_SPOTS = {
+    "Manhattan": (40.7580, -73.9855),  # Times Square
+    "Brooklyn": (40.6782, -73.9442),  # Crown Heights
+    "Queens": (40.7590, -73.8303),  # Flushing
+    "Bronx": (40.8448, -73.8648),  # Parkchester
+    "Staten Island": (40.5795, -74.1502),  # New Springville
+}
+
+
+def test_each_borough_has_its_land():
+    boroughs = load_boroughs()
+    assert sorted(boroughs) == sorted(BOROUGH_SPOTS)
+    for name, (lat, lng) in BOROUGH_SPOTS.items():
+        inside = [other for other, land in boroughs.items() if land.contains(Point(lng, lat))]
+        assert inside == [name]
+
+
+def test_the_city_land_leaves_out_the_rivers_and_new_jersey():
+    assert not LAND.contains(Point(-73.9960, 40.7060))  # East River under the middle of the Brooklyn Bridge
+    assert not LAND.contains(Point(-74.0200, 40.7400))  # Hudson River
+    assert not LAND.contains(Point(-74.0431, 40.7178))  # Jersey City
+
+
+def test_outlines_find_the_shape_a_point_is_in():
+    from shapely.geometry import box
+
+    outlines = Outlines([("A", box(0, 0, 1, 1)), (None, box(2, 0, 3, 1))])
+    assert outlines.find(Point(0.5, 0.5)) == (True, "A")
+    assert outlines.find(Point(2.5, 0.5)) == (True, None)  # an unnamed park
+    assert outlines.find(Point(1.5, 0.5)) == (False, None)
+    assert len(outlines) == 2 and list(outlines)[0][0] == "A"

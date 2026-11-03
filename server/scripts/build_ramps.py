@@ -22,6 +22,7 @@ import urllib.request
 from datetime import date
 from pathlib import Path
 
+import shapely
 from shapely import STRtree
 from shapely.geometry import Point
 
@@ -31,7 +32,6 @@ from graph import WalkGraph  # noqa: E402
 from walk_area import load_land  # noqa: E402
 
 GRAPH_FILE = SERVER_DIR / "data" / "walk_graph.npz"
-LAND_FILE = SERVER_DIR / "data" / "manhattan-boundary.json"
 OUTPUT_FILE = SERVER_DIR / "data" / "ramps.json"
 
 SITE = "https://data.cityofnewyork.us"
@@ -120,7 +120,7 @@ def usable_corner(a, b):
 
 
 def download_ramps(column, land):
-    """Ramp points in Manhattan, and {corner id: (lat, lng, street, street)}
+    """Ramp points in the city, and {corner id: (lat, lng, street, street)}
     for naming spots by their cross streets (card 12)."""
     west, south, east, north = land.bounds
     where = f"within_box({column}, {north}, {west}, {south}, {east})"
@@ -144,7 +144,7 @@ def download_ramps(column, land):
                 corner = row.get("cornerid")
                 if usable_corner(a, b) and corner and corner not in corners:
                     corners[corner] = [round(point[0], 6), round(point[1], 6), a, b]
-        print(f"  {offset + len(rows):,} rows read, {len(ramps):,} ramps in Manhattan so far")
+        print(f"  {offset + len(rows):,} rows read, {len(ramps):,} ramps on land so far")
         if len(rows) < PAGE_SIZE:
             return ramps, list(corners.values())
         offset += PAGE_SIZE
@@ -157,7 +157,8 @@ def main():
         sys.exit("The graph has no street corners yet. Run python scripts/build_graph.py first.")
     coords = graph.coords
 
-    land = load_land(LAND_FILE)
+    land = load_land()
+    shapely.prepare(land)  # makes the 200,000-odd "is it on land?" checks fast
     column, updated = point_column()
     print(f"Downloading curb ramps from NYC Open Data ({DATASET})...")
     ramps, corners = download_ramps(column, land)
@@ -187,7 +188,7 @@ def main():
         "corners": corners,
     }, separators=(",", ":")))
     print(f"\nSaved to {OUTPUT_FILE}")
-    print(f"  ramps in Manhattan        {len(ramps):,}")
+    print(f"  ramps on land             {len(ramps):,}")
     print(f"  street corners checked    {len(curbs):,}")
     print(f"  corners with no ramp      {len(no_ramp):,} ({share:.0%})")
     print(f"  named corners             {len(corners):,}, e.g. " + "; ".join(f"{c[2]} & {c[3]}" for c in corners[:3]))

@@ -1,4 +1,4 @@
-"""Build Manhattan's walking graph from OpenStreetMap (card 3).
+"""Build New York City's walking graph from OpenStreetMap (cards 3 and 15).
 
 Run once from the server folder, with the virtual environment active:
     pip install -r requirements-build.txt
@@ -6,9 +6,15 @@ Run once from the server folder, with the virtual environment active:
 
 It writes data/walk_graph.npz, the graph as NumPy arrays (see graph.py).
 The server reads that file when it starts and does not need OSMnx itself.
+
+The five boroughs are downloaded as one area, water included, in pieces of
+50 km² (see overpass.py). About 2 hours on GitHub Actions, most of it
+waiting for the server. One area, not five: OSMnx simplifies a graph by
+dropping the points in the middle of a street, and two boroughs simplified
+separately can end up with no point in common where a street crosses the
+line between them, so a walk would stop at the border.
 """
 
-import json
 import sys
 import time
 from collections import defaultdict
@@ -17,7 +23,6 @@ from pathlib import Path
 
 import networkx as nx
 import osmnx as ox
-from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
 import overpass  # scripts/overpass.py: server choice and retries
@@ -26,14 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from graph import WalkGraph  # noqa: E402
 
 SERVER_DIR = Path(__file__).resolve().parent.parent
-BOUNDARY_FILE = SERVER_DIR.parent / "client" / "src" / "data" / "manhattan-boundary.json"
 OUTPUT_FILE = SERVER_DIR / "data" / "walk_graph.npz"
-
-# The same land the map lets you click on (see client/src/data/manhattan.js).
-LAND = ["main", "roosevelt"]
-
-# Grow the outline by about 50 m so waterfront paths and piers aren't cut off.
-BUFFER_DEGREES = 0.0005
 
 # Streets that cars use, so crossing them means stepping off a curb (card 11).
 STREET_TYPES = {
@@ -47,10 +45,8 @@ MIN_COMPONENT_NODES = 50
 
 
 def load_area():
-    boundary = json.loads(BOUNDARY_FILE.read_text())
-    # The JSON stores [lat, lng]. Shapely wants (x, y), which is (lng, lat).
-    polygons = [Polygon([(lng, lat) for lat, lng in boundary[name]]) for name in LAND]
-    return unary_union(polygons).buffer(BUFFER_DEGREES)
+    """The five boroughs as one shape, water included (the bridges are over it)."""
+    return unary_union([overpass.borough_area(name) for name in overpass.BOROUGHS])
 
 
 def as_set(value):
@@ -95,12 +91,12 @@ def main():
     ox.settings.useful_tags_way = list(ox.settings.useful_tags_way) + ["footway"]
 
     area = load_area()
-    print("Downloading Manhattan's walkable streets. This can take a few minutes...")
+    print("Downloading the five boroughs' walkable streets. This takes a while...")
     start = time.time()
     G = overpass.download("walking graph", lambda: ox.graph_from_polygon(
         area,
         network_type="walk",
-        retain_all=True,  # keep Roosevelt Island, which has no walking link to Manhattan
+        retain_all=True,  # keep islands with no walking link, such as Governors Island
         truncate_by_edge=True,
     ))
     print(f"Downloaded {len(G.nodes):,} nodes and {len(G.edges):,} edges in {time.time() - start:.0f}s")

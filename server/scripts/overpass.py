@@ -1,9 +1,14 @@
-"""Shared Overpass setup for the download scripts: server choice and retries.
+"""Shared Overpass setup for the download scripts: server choice, retries,
+and the five boroughs to download.
 
 Public Overpass servers are often busy and answer 502 "at capacity", asking
 callers to retry with exponential backoff. download() does that: it retries
 a request up to RETRIES times, waiting 30 s, then 1, 2, 4, and 5 minutes,
 and rotates through the servers.
+
+The whole city is too big for one request (card 15), so OSMnx splits each
+area into pieces of at most MAX_PIECE_M2 and requests them one by one. A
+retry only requests the pieces not yet saved in ./cache.
 
 Which servers, in order:
 - OVERPASS_URLS: a comma-separated list, if set. The refresh job sets it from
@@ -24,7 +29,22 @@ import osmnx as ox
 # a free global mirror with no stated limits. Private.coffee, used before,
 # stopped answering in 2026.
 SERVERS = ["https://overpass-api.de/api", "https://maps.mail.ru/osm/tools/overpass/api"]
-RETRIES = 6
+# Each try re-requests only the pieces not yet cached, so tries are cheap.
+# With the whole city, a few pieces fail on most runs.
+RETRIES = 20
+# OSMnx's default is 2,500 km², which puts a whole borough in one request.
+# Requests that big time out on busy servers; 50 km² ones finish.
+MAX_PIECE_M2 = 50_000_000
+
+# The boroughs as OpenStreetMap knows them, water included, so the bridges
+# between them are inside the area and come with the walking graph.
+BOROUGHS = {
+    "Manhattan": "Manhattan, New York, USA",
+    "Brooklyn": "Brooklyn, New York, USA",
+    "Queens": "Queens, New York, USA",
+    "Bronx": "The Bronx, New York, USA",
+    "Staten Island": "Staten Island, New York, USA",
+}
 FIRST_WAIT_S = 30
 MAX_WAIT_S = 300
 
@@ -38,6 +58,34 @@ def configure():
     ox.settings.overpass_rate_limit = False
     # Give each request up to 5 minutes.
     ox.settings.requests_timeout = 300
+    ox.settings.max_query_area_size = MAX_PIECE_M2
+    share_cache_across_servers(servers())
+
+
+def share_cache_across_servers(server_list):
+    """OSMnx names each cached response after the full request address,
+    server included, so a piece saved from one server is downloaded again
+    when the next try goes to another. Look for it under every server's name."""
+    from osmnx import _http
+
+    check = getattr(_http._check_cache, "original", _http._check_cache)
+
+    def check_every_server(key):
+        current = ox.settings.overpass_url.rstrip("/")
+        if key.startswith(current + "/"):
+            for server in server_list:
+                found = check(server.rstrip("/") + key[len(current):])
+                if found is not None:
+                    return found
+        return check(key)
+
+    check_every_server.original = check
+    _http._check_cache = check_every_server
+
+
+def borough_area(name):
+    """A borough's outline from OpenStreetMap (water included), as a shapely shape."""
+    return ox.geocode_to_gdf(BOROUGHS[name]).geometry.iloc[0]
 
 
 def servers():
