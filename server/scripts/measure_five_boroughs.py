@@ -150,7 +150,9 @@ def to_arrays(json_path, npz_path):
 
     a = np.array([index[e[0]] for e in data["edges"]], dtype=np.int32)
     b = np.array([index[e[1]] for e in data["edges"]], dtype=np.int32)
-    length = np.array([e[2] for e in data["edges"]], dtype=np.float32)
+    # 64-bit: scipy's dijkstra copies the whole edge list to 64-bit on every
+    # call if given 32-bit lengths, which made each search about 10x slower.
+    length = np.array([e[2] for e in data["edges"]], dtype=np.float64)
     # Curve points for drawing, flattened: edge k's points are
     # shape_points[shape_start[k]:shape_start[k + 1]].
     counts = np.array([len(e[3]) if len(e) > 3 else 0 for e in data["edges"]], dtype=np.int32)
@@ -181,8 +183,15 @@ def load_arrays(npz_path):
 # ---------- measuring (each load runs in its own process for clean numbers) ----------
 
 def peak_rss_mb():
-    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    return peak / 1e6 if sys.platform == "darwin" else peak / 1e3  # macOS: bytes, Linux: KB
+    """Most memory this process has used, in MB."""
+    if sys.platform.startswith("linux"):
+        # Linux's ru_maxrss carries over the parent's peak when the parent was
+        # bigger, which hid the real figure. VmHWM starts fresh in each program.
+        with open("/proc/self/status") as status:
+            for line in status:
+                if line.startswith("VmHWM:"):
+                    return int(line.split()[1]) / 1e3  # KB
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6  # macOS: bytes
 
 
 def child(kind, path):
@@ -234,9 +243,9 @@ def run_child(kind, path):
 
 
 def agree(a, b):
-    """True if two searches reach the same nodes in the same times. The arrays
-    store lengths as 32-bit floats, so a node right on the 15-minute line can
-    be just inside in one version and just outside in the other; allow that."""
+    """True if two searches reach the same nodes in the same times. The two
+    versions add up lengths in different ways, so a node right on the 15-minute
+    line can be just inside in one and just outside in the other; allow that."""
     for node in a.keys() | b.keys():
         if node in a and node in b:
             if abs(a[node] - b[node]) > 0.01:
