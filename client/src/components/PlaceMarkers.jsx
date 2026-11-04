@@ -21,7 +21,10 @@ const UNKNOWN_ICONS = Object.fromEntries(CATEGORIES.map((c) => [c.id, makeIcon(c
 export default function PlaceMarkers({ places }) {
   return places.map((place) => (
     <Marker
-      key={place.id}
+      // One OpenStreetMap place can be in two categories (a grocery that is
+      // also a pharmacy). With the id alone, React mixes up the two markers
+      // and leaves one on the map after the walk moves.
+      key={`${place.category}:${place.id}`}
       position={[place.lat, place.lng]}
       icon={(place.status === "unknown" ? UNKNOWN_ICONS : ICONS)[place.category]}
       // Hundreds of markers would each be a Tab stop. The panel lists the

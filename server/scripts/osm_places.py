@@ -45,4 +45,7 @@ def has_tag(row, key, values):
 def download(land):
     """Every matching place and lake in the city, as OSMnx's GeoDataFrame."""
     area = land.buffer(EDGE_DEGREES).simplify(SIMPLIFY_DEGREES)
-    return overpass.download("places and water", lambda: ox.features_from_polygon(area, tags=TAGS))
+    features = overpass.download("places and water", lambda: ox.features_from_polygon(area, tags=TAGS))
+    # A place on the line between two download pieces comes back from both.
+    # Keep one, or it's saved twice and the map draws two markers for it.
+    return features[~features.index.duplicated()]

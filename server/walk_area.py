@@ -63,6 +63,33 @@ def load_not_lived_on(path=NOT_LIVED_ON_FILE, boroughs_path=BOROUGHS_FILE):
     return found
 
 
+# A piece of land with fewer walking-graph nodes than this has no streets
+# anyone lives on: marsh islands in Jamaica Bay, rocks off Pelham Bay.
+MIN_LIVED_NODES = 10
+# Land closer than this (about 20 m) to land with streets is a pier or a
+# marsh joined to the shore, not an island.
+TOUCH_DEGREES = 0.0002
+
+
+def empty_islands(node_lat, node_lng, path=BOROUGHS_FILE, min_nodes=MIN_LIVED_NODES):
+    """[(None, land)] for each island with almost no paths on it: a piece of
+    a borough, other than its biggest, with fewer than min_nodes nodes and
+    not touching land that has more. node_lat and node_lng are NumPy arrays
+    of the walking graph's nodes."""
+    with_streets, without = [], []
+    for rings in json.loads(Path(path).read_text())["boroughs"].values():
+        for i, ring in enumerate(rings):  # biggest first: ring 0 is the mainland
+            land = shapely.make_valid(Polygon([(x, y) for y, x in ring]))
+            west, south, east, north = land.bounds
+            near = (node_lat >= south) & (node_lat <= north) & (node_lng >= west) & (node_lng <= east)
+            count = int(shapely.contains_xy(land, node_lng[near], node_lat[near]).sum()) if near.any() else 0
+            (with_streets if i == 0 or count >= min_nodes else without).append(land)
+    if not without:
+        return []
+    lived = STRtree(with_streets)
+    return [(None, land) for land in without if not len(lived.query(land, predicate="dwithin", distance=TOUCH_DEGREES))]
+
+
 def load_land(path=BOROUGHS_FILE):
     """All five boroughs' land as one shape in (lng, lat), for trimming the area."""
     return shapely.make_valid(unary_union(list(load_boroughs(path).values())))

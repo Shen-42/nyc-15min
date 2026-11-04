@@ -34,7 +34,7 @@ from rate_limit import RateLimited, RateLimiter, make_counter
 from scoring import parse_weights, score_walk, settings_with_weights
 from shared_cache import make_shared_cache
 from usage import make_usage
-from walk_area import Outlines, load_boroughs, load_not_lived_on, load_parks, load_water, walking_area
+from walk_area import Outlines, empty_islands, load_boroughs, load_not_lived_on, load_parks, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.npz"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
@@ -53,6 +53,8 @@ walk_graph = None
 boroughs = Outlines([])
 # Islands where nobody lives, such as Rikers and Randall's (card 15).
 islands = Outlines([])
+# Islands with almost no paths, found from the graph when it loads.
+empty_land = Outlines([])
 # The five boroughs' shoreline minus lakes and ponds, for trimming walking areas.
 land = None
 # Lakes and ponds, for turning away clicks on water.
@@ -91,7 +93,7 @@ def peak_memory_mb():
 
 @asynccontextmanager
 async def lifespan(app):
-    global walk_graph, boroughs, islands, land, water, parks, amenities, places_index, amenity_by_id, ramp_penalty, grid, shared_cache
+    global walk_graph, boroughs, islands, empty_land, land, water, parks, amenities, places_index, amenity_by_id, ramp_penalty, grid, shared_cache
     if AMENITIES_FILE.exists():
         amenities = load_amenities(AMENITIES_FILE)
         places_index = PlaceIndex(amenities)
@@ -131,6 +133,8 @@ async def lifespan(app):
     if GRAPH_FILE.exists():
         walk_graph = WalkGraph.from_file(GRAPH_FILE)
         print(f"Loaded walking graph: {len(walk_graph):,} nodes, {walk_graph.edge_count:,} edges")
+        empty_land = Outlines(empty_islands(walk_graph.lat, walk_graph.lng))
+        print(f"Found {len(empty_land)} islands with no streets")
         version = f"{AREA_FORMAT}-{walk_graph.meta.get('built')}-{len(walk_graph)}"
         shared_cache = make_shared_cache(version)
     else:
@@ -333,6 +337,9 @@ def plan_walk(request, kind, lat, lng, minutes, timer, mode="walk"):
     on_island, name = islands.find(clicked)
     if on_island:
         raise HTTPException(status_code=422, detail=f"Nobody lives on {name}. Choose a spot where people live.")
+    on_empty_island, _ = empty_land.find(clicked)
+    if on_empty_island:
+        raise HTTPException(status_code=422, detail="Nobody lives on this island. Choose a spot where people live.")
     in_water, name = water.find(clicked)
     if in_water:
         raise HTTPException(status_code=422, detail=f"That spot is in {name or 'the water'}. Choose a spot on land.")

@@ -6,7 +6,7 @@ from shapely.geometry import Point, shape
 from shapely.ops import unary_union
 
 from graph import WALK_SPEED_M_PER_MIN, WalkGraph
-from walk_area import Outlines, cut_path, load_boroughs, load_land, load_water, walking_area
+from walk_area import Outlines, cut_path, empty_islands, load_boroughs, load_land, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.npz"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
@@ -157,3 +157,28 @@ def test_unnamed_outlines_are_called_by_their_kind(tmp_path):
         {"name": None, "rings": [square]},  # written before card 15, with no kind
     ]))
     assert [name for name, _ in load_parks(path)] == ["Woodlawn Cemetery", "a cemetery", "a park"]
+
+
+def test_islands_with_no_paths_are_found(tmp_path):
+    """Card 15: a borough's mainland, an island with streets, a marsh island
+    with none, and a pier with none that touches the mainland."""
+    import numpy as np
+
+    def square(lat, lng, size):
+        return [[lat, lng], [lat + size, lng], [lat + size, lng + size], [lat, lng + size]]
+
+    path = tmp_path / "boroughs.json"
+    path.write_text(json.dumps({"boroughs": {"Testboro": [
+        square(40.0, -74.0, 0.1),        # mainland
+        square(40.0, -73.85, 0.02),      # island with streets
+        square(40.05, -73.88, 0.01),     # marsh island, 2 km out
+        square(40.05, -73.9, 0.001),     # pier joined to the mainland
+    ]}}))
+    rng = np.random.default_rng(1)
+    lat = np.concatenate([40.0 + rng.random(50) * 0.1, 40.0 + rng.random(20) * 0.02, [40.055]])
+    lng = np.concatenate([-74.0 + rng.random(50) * 0.1, -73.85 + rng.random(20) * 0.02, [-73.875]])
+    found = empty_islands(lat, lng, path=path)
+    assert len(found) == 1
+    name, land = found[0]
+    assert name is None
+    assert land.contains(Point(-73.875, 40.055))

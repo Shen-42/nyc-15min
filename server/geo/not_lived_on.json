@@ -1,6 +1,6 @@
 {
   "meta": {
-    "about": "Islands where nobody lives (card 15). A point on each; the piece of land in geo/boroughs.json around it is left out of the grid, and clicks on it are turned away. Islands with no paths, like the marshes in Jamaica Bay, need no entry: they have no streets to start a walk from."
+    "about": "Islands where nobody lives (card 15). A point on each; the piece of land in geo/boroughs.json around it is left out of the grid, and clicks on it are turned away with its name. Islands with almost no paths, like the marshes in Jamaica Bay, need no entry: the server finds them from the walking graph (walk_area.empty_islands) and says nobody lives there."
   },
   "islands": {
     "Randall's and Wards Islands": [

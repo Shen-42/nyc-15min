@@ -254,7 +254,7 @@ def test_areas_are_saved_to_redis_and_read_back():
 
 
 def test_clicks_on_islands_where_nobody_lives_are_turned_away():
-    """Card 15: Rikers, Randall's and Wards, North Brother, and the rest."""
+    """Card 15: Rikers, Randall's and Wards, North Brother, the marsh islands, and the rest."""
     from pathlib import Path
 
     import pytest
@@ -269,6 +269,11 @@ def test_clicks_on_islands_where_nobody_lives_are_turned_away():
             res = c.get("/api/places", params={"lat": lat, "lng": lng})
             assert res.status_code == 422
             assert res.json()["detail"].startswith("Nobody lives on")
+        # Islands with no streets: a Jamaica Bay marsh, Hoffman Island, Mill Rock.
+        for lat, lng in [(40.62417, -73.85296), (40.57883, -74.05367), (40.78063, -73.93785)]:
+            res = c.get("/api/places", params={"lat": lat, "lng": lng})
+            assert res.status_code == 422
+            assert res.json()["detail"].startswith("Nobody lives on this island")
         roosevelt = c.get("/api/places", params={"lat": 40.7620, "lng": -73.9497})  # people live here
         assert roosevelt.status_code == 200
     rate_limiter.counter.clear()

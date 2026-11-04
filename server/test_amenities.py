@@ -19,6 +19,16 @@ def place(id, category, nodes):
     return {"id": id, "category": category, "name": None, "lat": 0, "lng": 0, "nodes": nodes}
 
 
+def test_places_listed_twice_load_once(tmp_path):
+    """Card 15: a place on the line between two download pieces came back
+    twice, and its two map markers had the same key."""
+    import json
+
+    path = tmp_path / "amenities.json"
+    path.write_text(json.dumps([place("way/1", "park", [1]), place("way/1", "park", [1]), place("way/1", "school", [1])]))
+    assert [(p["category"], p["id"]) for p in load_amenities(path)] == [("park", "way/1"), ("school", "way/1")]
+
+
 def test_unreached_places_are_left_out():
     places = [place("a", "grocery", [1]), place("b", "grocery", [9])]
     reached = reachable_amenities(places, {1: 2.0, 2: 5.0})

@@ -10,7 +10,17 @@ CATEGORIES = ["grocery", "pharmacy", "clinic", "park", "school", "subway"]
 
 
 def load_amenities(path):
-    return json.loads(Path(path).read_text())
+    """The places in amenities.json, each (category, id) once. Files built
+    before card 15's fix list about 160 places twice, which drew two map
+    markers with the same key that the site then failed to remove."""
+    seen = set()
+    places = []
+    for place in json.loads(Path(path).read_text()):
+        key = (place["category"], place["id"])
+        if key not in seen:
+            seen.add(key)
+            places.append(place)
+    return places
 
 
 class PlaceIndex:
