@@ -20,7 +20,7 @@ SPOTS = {
     "Brooklyn": (40.6782, -73.9442),
     "Queens": (40.7590, -73.8303),
     "Bronx": (40.8448, -73.8648),
-    "Staten Island": (40.5795, -74.1502),
+    "Staten Island": (40.6437, -74.0764),  # St. George
 }
 
 
@@ -51,9 +51,11 @@ def main():
     for borough, (lat, lng) in SPOTS.items():
         for attempt in ("first", "repeat"):
             for route in ("places", "area"):
-                seconds, status, headers, _ = get(f"{API}/api/{route}?lat={lat}&lng={lng}")
+                seconds, status, headers, body = get(f"{API}/api/{route}?lat={lat}&lng={lng}")
                 total, steps = server_ms(headers)
                 print(f"  {borough:13} {attempt:6} /api/{route:6} {status}  {seconds * 1000:6.0f} ms total, server {total:5.1f} ms ({steps})")
+                if status != 200:
+                    print(f"    {json.loads(body).get('detail')}")
 
     print("\nScore map files (compressed, as sent)")
     _, status, headers, body = get(f"{SITE}/grid/index.json")
