@@ -73,13 +73,30 @@ class Outlines:
         return False, None
 
 
+# What to call an unnamed outline from parks.json, by its kind (card 15).
+KIND_NAMES = {
+    "park": "a park",
+    "cemetery": "a cemetery",
+    "golf course": "a golf course",
+    "nature area": "a nature area",
+    "airport": "an airport",
+    "prison": "a prison",
+}
+
+
 def load_parks(path):
-    """Park outlines from scripts/build_amenities.py as a list of (name or None, shape in (lng, lat))."""
+    """Outlines of parks and other land where nobody lives (cemeteries, golf
+    courses, nature areas, airports, prisons), from scripts/build_amenities.py,
+    as a list of (name, shape in (lng, lat)). Unnamed ones are called by their
+    kind, e.g. "a cemetery"."""
     parks = []
     for park in json.loads(Path(path).read_text()):
-        rings = [Polygon([(lng, lat) for lat, lng in ring]) for ring in park["rings"] if len(ring) >= 4]
+        # make_valid on each ring before joining them: joining fails on a
+        # ring that crosses itself, which simplifying can cause.
+        rings = [shapely.make_valid(Polygon([(lng, lat) for lat, lng in ring])) for ring in park["rings"] if len(ring) >= 4]
         if rings:
-            parks.append((park["name"], shapely.make_valid(unary_union(rings))))
+            name = park["name"] or KIND_NAMES.get(park.get("kind", "park"), "a park")
+            parks.append((name, unary_union(rings)))
     return parks
 
 

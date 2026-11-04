@@ -4,7 +4,9 @@ Run once from the server folder, with the virtual environment active, after
 scripts/build_graph.py:
     python scripts/build_amenities.py
 
-It writes data/amenities.json and data/parks.json. Every category comes from
+It writes data/amenities.json and data/parks.json (parks, and other land
+where nobody lives: cemeteries, golf courses, nature areas, airports,
+prisons). Every category comes from
 one download for the whole city (scripts/osm_places.py), and OSMnx caches
 each piece of it in ./cache, so if a piece fails you can run the script
 again and only the missing ones are downloaded.
@@ -55,6 +57,23 @@ CATEGORIES = {
     "subway": {"tags": {"railway": "station"}, "keep": is_subway},
 }
 
+# Land where nobody lives, besides parks (card 15). Their outlines go in
+# parks.json with the parks, so the grid leaves them out of the gaps, the best
+# spots, and the rank, and the server turns away clicks on them. A shape
+# belongs to the first kind whose tags it has.
+NOT_LIVED_IN = {
+    "cemetery": {"landuse": "cemetery", "amenity": "grave_yard"},
+    "golf course": {"leisure": "golf_course"},
+    "nature area": {"leisure": "nature_reserve", "natural": "wetland"},
+    "airport": {"aeroway": "aerodrome"},
+    "prison": {"amenity": "prison"},
+}
+
+# Nature areas bigger than this are skipped. Some huge protected areas, like
+# Gateway National Recreation Area, take in neighborhoods (Breezy Point), and
+# the smaller marshes and reserves inside them are listed on their own.
+MAX_NATURE_M2 = 20_000_000
+
 # Parks smaller than this are traffic islands and sitting areas, not parks.
 MIN_PARK_M2 = 1_000
 
@@ -81,6 +100,20 @@ def to_meters(geom):
         return out
 
     return shapely.transform(geom, f)
+
+
+def outline(row, geom, area_m, kind):
+    """A parks.json entry: name, kind, area, and outer rings as [lat, lng]."""
+    simple = geom.simplify(PARK_SIMPLIFY_M / M_PER_DEG_LAT)
+    parts = list(simple.geoms) if simple.geom_type == "MultiPolygon" else [simple]
+    parts = [part for part in parts if part.geom_type == "Polygon" and not part.is_empty]
+    return {
+        "name": text(row.get("name")),
+        "kind": kind,
+        "area_m2": round(area_m.area),
+        # Holes (a building inside a park) are ignored.
+        "rings": [[[round(y, 6), round(x, 6)] for x, y in part.exterior.coords] for part in parts],
+    }
 
 
 def matches(row, spec):
@@ -132,15 +165,7 @@ def main():
                 if category == "park" and area_m.area < MIN_PARK_M2:
                     continue
                 if category == "park":
-                    simple = geom.simplify(PARK_SIMPLIFY_M / M_PER_DEG_LAT)
-                    parts = list(simple.geoms) if simple.geom_type == "MultiPolygon" else [simple]
-                    parts = [part for part in parts if part.geom_type == "Polygon" and not part.is_empty]
-                    park_outlines.append({
-                        "name": text(row.get("name")),
-                        "area_m2": round(area_m.area),
-                        # Outer rings as [lat, lng]. Holes (a building inside a park) are ignored.
-                        "rings": [[[round(y, 6), round(x, 6)] for x, y in part.exterior.coords] for part in parts],
-                    })
+                    park_outlines.append(outline(row, geom, area_m, "park"))
                 inside = tree.query(area_m.buffer(EDGE_M), predicate="contains")
                 nodes = [node_ids[i] for i in inside]
                 if not nodes:
@@ -166,9 +191,34 @@ def main():
             kept += 1
         print(f"Kept {kept:,} {category} places")
 
+    # Other land where nobody lives. A nature reserve can lie mostly in the
+    # water (Jamaica Bay's), so these count if any part touches land.
+    shapely.prepare(land)
+    other = Counter()
+    for _, row in features.iterrows():
+        geom = row.geometry
+        if geom.geom_type not in ("Polygon", "MultiPolygon"):
+            continue
+        kind = next((k for k, tags in NOT_LIVED_IN.items() if any(has_tag(row, key, v) for key, v in tags.items())), None)
+        if kind is None or not land.intersects(geom):
+            continue
+        area_m = to_meters(geom)
+        if area_m.area < MIN_PARK_M2:
+            continue
+        if kind == "nature area" and area_m.area > MAX_NATURE_M2:
+            print(f"  skipped a {area_m.area / 1e6:.0f} km² nature area: {text(row.get('name'))}")
+            continue
+        park_outlines.append(outline(row, geom, area_m, kind))
+        other[kind] += 1
+    print("Land where nobody lives, besides parks: " + ", ".join(f"{n:,} {k}" for k, n in other.items()))
+    # The biggest of each kind, to check by eye that none takes in a neighborhood.
+    for kind in NOT_LIVED_IN:
+        biggest = sorted((o for o in park_outlines if o["kind"] == kind), key=lambda o: -o["area_m2"])[:5]
+        print(f"  largest {kind}s: " + "; ".join(f"{o['name'] or '(unnamed)'} {o['area_m2'] / 1e6:.1f} km²" for o in biggest))
+
     OUTPUT_FILE.write_text(json.dumps(amenities, separators=(",", ":")))
     PARKS_FILE.write_text(json.dumps(park_outlines, separators=(",", ":")))
-    print(f"Saved {len(park_outlines)} park outlines to {PARKS_FILE} ({PARKS_FILE.stat().st_size / 1000:.0f} KB)")
+    print(f"Saved {len(park_outlines)} outlines of parks and other unlived land to {PARKS_FILE} ({PARKS_FILE.stat().st_size / 1000:.0f} KB)")
     counts = Counter(a["category"] for a in amenities)
     size_mb = OUTPUT_FILE.stat().st_size / 1_000_000
     print(f"\nSaved {len(amenities)} places to {OUTPUT_FILE} ({size_mb:.1f} MB)")

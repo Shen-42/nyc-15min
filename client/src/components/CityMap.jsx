@@ -12,7 +12,7 @@ import {
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
-import { CITY_BOUNDS, CITY_CENTER, LAND_POLYGONS, OUTER_RING } from "../data/city";
+import { CITY_BOUNDS, CITY_CENTER, CITY_OUTLINE, OUTER_RING } from "../data/city";
 import BarrierMarkers from "./BarrierMarkers";
 import GridLayer from "./GridLayer";
 import { CATEGORY_BY_ID } from "../data/categories";
@@ -166,7 +166,7 @@ export default function CityMap({
 
       {/* className must be a direct prop: react-leaflet applies pathOptions
           after the shape is created, and Leaflet ignores className then. */}
-      <Polygon positions={[OUTER_RING, ...LAND_POLYGONS]} className="outside-mask" interactive={false} />
+      <Polygon positions={[OUTER_RING, ...CITY_OUTLINE]} className="outside-mask" interactive={false} />
 
       {/* GeoJSON doesn't redraw when its data changes, so a new key forces
           a fresh layer. The key changes when a new result arrives, not when

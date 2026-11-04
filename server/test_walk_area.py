@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -143,3 +144,16 @@ def test_outlines_find_the_shape_a_point_is_in():
     assert outlines.find(Point(2.5, 0.5)) == (True, None)  # an unnamed park
     assert outlines.find(Point(1.5, 0.5)) == (False, None)
     assert len(outlines) == 2 and list(outlines)[0][0] == "A"
+
+
+def test_unnamed_outlines_are_called_by_their_kind(tmp_path):
+    from walk_area import load_parks
+
+    square = [[40.70, -73.90], [40.70, -73.89], [40.71, -73.89], [40.71, -73.90], [40.70, -73.90]]
+    path = tmp_path / "parks.json"
+    path.write_text(json.dumps([
+        {"name": "Woodlawn Cemetery", "kind": "cemetery", "rings": [square]},
+        {"name": None, "kind": "cemetery", "rings": [square]},
+        {"name": None, "rings": [square]},  # written before card 15, with no kind
+    ]))
+    assert [name for name, _ in load_parks(path)] == ["Woodlawn Cemetery", "a cemetery", "a park"]

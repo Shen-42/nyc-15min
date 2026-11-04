@@ -6,6 +6,10 @@
 // NYC Department of City Planning's borough boundaries. If you change one,
 // copy it over.
 import data from "./boroughs.json";
+// The city's legal boundary, which runs through the water (made by
+// server/scripts/make_city_outline.py from OpenStreetMap). The grey mask is
+// cut along it, so rivers and bays inside the city aren't greyed out.
+import outline from "./city-outline.json";
 
 // The map opens on Manhattan.
 export const CITY_CENTER = [40.7831, -73.9712];
@@ -16,7 +20,7 @@ export const CITY_BOUNDS = [
   [40.97, -73.65],
 ];
 
-// A big box around the city. The mask is this box with the five boroughs cut out.
+// A big box around the city. The mask is this box with the city's outline cut out.
 export const OUTER_RING = [
   [40.3, -74.5],
   [40.3, -73.5],
@@ -51,8 +55,11 @@ export const BOROUGHS = ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Isl
   allBounds: boundsOf(data.boroughs[name]),
 }));
 
-// Every piece of land, for the mask and for cutting the heat map to the shoreline.
+// Every piece of land, for cutting the heat map to the shoreline.
 export const LAND_POLYGONS = BOROUGHS.flatMap((b) => b.rings);
+
+// The city's outline, water included, for the grey mask outside it.
+export const CITY_OUTLINE = outline.rings;
 
 // Ray casting: draw a line from the point going east and count how many
 // polygon edges it crosses. An odd count means the point is inside.

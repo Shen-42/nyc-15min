@@ -5,8 +5,11 @@
 # which names that release. The commit makes Render redeploy the API, and
 # its build downloads the new data (server/scripts/get_data.py).
 # Run it by hand from the repo's Actions tab: "Refresh map data" > "Run workflow".
-# Tick "Only rebuild the grid" to score the grid again from the current
-# release's data, without the 4-hour download: for changes to build_grid.py.
+# "What to rebuild" picks how much (the monthly run does everything):
+#   everything       streets, lakes, places, curb ramps, grid: about 4 hours
+#   places and grid  lakes, places, and the grid, keeping the release's
+#                    streets and curb ramps: under an hour
+#   grid only        the grid, from the release's data: about 5 minutes
 name: Refresh map data
 
 on:
@@ -14,10 +17,11 @@ on:
     - cron: "0 7 1 * *" # 07:00 UTC on the 1st of every month
   workflow_dispatch:
     inputs:
-      grid_only:
-        description: "Only rebuild the grid, from the current release's data (minutes, not hours)"
-        type: boolean
-        default: false
+      scope:
+        description: "What to rebuild"
+        type: choice
+        options: [everything, places and grid, grid only]
+        default: everything
 
 permissions:
   contents: write # to create the release and commit data-release.json
@@ -37,6 +41,8 @@ jobs:
       # NextGIS server with a free key first. Empty means the public defaults
       # in server/scripts/overpass.py.
       OVERPASS_URLS: ${{ secrets.OVERPASS_URLS }}
+      # The monthly run has no inputs, so it rebuilds everything.
+      SCOPE: ${{ inputs.scope || 'everything' }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
@@ -59,7 +65,7 @@ jobs:
       # Overpass answers saved by an earlier try of this same run, so
       # "Re-run failed jobs" picks up where it stopped instead of starting over.
       - name: Restore this run's downloads
-        if: ${{ !inputs.grid_only }}
+        if: env.SCOPE != 'grid only'
         uses: actions/cache/restore@v4
         with:
           path: server/cache
@@ -69,20 +75,20 @@ jobs:
       # Public Overpass servers are often busy. Each request retries with
       # growing waits and alternates servers (see server/scripts/overpass.py).
       - name: Download walking graph
-        if: ${{ !inputs.grid_only }}
+        if: env.SCOPE == 'everything'
         run: python scripts/build_graph.py
 
       - name: Download lakes and ponds
-        if: ${{ !inputs.grid_only }}
+        if: env.SCOPE != 'grid only'
         run: python scripts/build_water.py
 
       # Same download as the lakes (scripts/osm_places.py), so mostly from the cache.
       - name: Download places
-        if: ${{ !inputs.grid_only }}
+        if: env.SCOPE != 'grid only'
         run: python scripts/build_amenities.py
 
       - name: Save this run's downloads
-        if: ${{ always() && !inputs.grid_only }}
+        if: always() && env.SCOPE != 'grid only'
         uses: actions/cache/save@v4
         with:
           path: server/cache
@@ -90,7 +96,7 @@ jobs:
 
       # NYC Open Data, not Overpass. Needs the new graph's street corners.
       - name: Download curb ramps
-        if: ${{ !inputs.grid_only }}
+        if: env.SCOPE == 'everything'
         run: python scripts/build_ramps.py
 
       # The background job for cards 12 and 15: score every 100 m of the city

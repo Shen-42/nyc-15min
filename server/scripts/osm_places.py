@@ -12,14 +12,17 @@ import osmnx as ox
 import overpass
 
 # Every tag either script looks for. A place matches if it has any of them.
+# The cemeteries, golf courses, nature reserves, wetlands, airports, and
+# prisons are outlines of land where nobody lives (build_amenities.py, card 15).
 TAGS = {
     "shop": ["supermarket", "grocery", "greengrocer"],
-    "amenity": ["pharmacy", "clinic", "doctors", "hospital", "school"],
+    "amenity": ["pharmacy", "clinic", "doctors", "hospital", "school", "grave_yard", "prison"],
     "healthcare": "pharmacy",
-    "leisure": "park",
+    "leisure": ["park", "nature_reserve", "golf_course"],
     "railway": "station",
-    "natural": "water",
-    "landuse": "reservoir",
+    "natural": ["water", "wetland"],
+    "landuse": ["reservoir", "cemetery"],
+    "aeroway": "aerodrome",
 }
 
 # Grow the shoreline by about 200 m so places on piers and the water's edge
