@@ -159,18 +159,6 @@ def test_rank_against_the_borough_and_the_city():
         # The grid now comes from the site's own files, not the API (card 15).
         assert c.get("/api/grid").status_code == 404
     rate_limiter.counter.clear()
-    times_square = {"lat": 40.758, "lng": -73.9855}
-    with TestClient(app) as c:
-        res = c.get("/api/grid")
-        assert res.status_code == 200
-        body = res.json()
-        assert len(body["cells"]) > 4000 and set(body["gaps"]) == set(body["meta"]["categories"])
-
-        walk = c.get("/api/places", params=times_square).json()
-        assert 0 <= walk["score"]["rank"] <= 100
-        chair = c.get("/api/places", params={**times_square, "mode": "wheelchair"}).json()
-        assert chair["score"]["rank"] is None
-    rate_limiter.counter.clear()
 
 
 def test_clicks_in_a_park_are_turned_away():
