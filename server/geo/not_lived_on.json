@@ -1,0 +1,39 @@
+{
+  "meta": {
+    "about": "Islands where nobody lives (card 15). A point on each; the piece of land in geo/boroughs.json around it is left out of the grid, and clicks on it are turned away. Islands with no paths, like the marshes in Jamaica Bay, need no entry: they have no streets to start a walk from."
+  },
+  "islands": {
+    "Randall's and Wards Islands": [
+      40.7929,
+      -73.9255
+    ],
+    "Governors Island": [
+      40.6889,
+      -74.0168
+    ],
+    "Liberty Island": [
+      40.6892,
+      -74.0445
+    ],
+    "Ellis Island": [
+      40.699,
+      -74.0396
+    ],
+    "Rikers Island": [
+      40.7934,
+      -73.8845
+    ],
+    "Hart Island": [
+      40.8527,
+      -73.771
+    ],
+    "North Brother Island": [
+      40.8008,
+      -73.899
+    ],
+    "South Brother Island": [
+      40.7962,
+      -73.8977
+    ]
+  }
+}

@@ -251,3 +251,24 @@ def test_areas_are_saved_to_redis_and_read_back():
             main.shared_cache = saved
             main.cached_area.cache_clear()
     main.rate_limiter.counter.clear()
+
+
+def test_clicks_on_islands_where_nobody_lives_are_turned_away():
+    """Card 15: Rikers, Randall's and Wards, North Brother, and the rest."""
+    from pathlib import Path
+
+    import pytest
+
+    if not (Path(__file__).parent / "data" / "walk_graph.npz").exists():
+        pytest.skip("run scripts/build_graph.py first")
+    from main import rate_limiter
+
+    rate_limiter.counter.clear()
+    with TestClient(app) as c:
+        for lat, lng in [(40.7934, -73.8845), (40.7890, -73.9205), (40.8008, -73.8990)]:
+            res = c.get("/api/places", params={"lat": lat, "lng": lng})
+            assert res.status_code == 422
+            assert res.json()["detail"].startswith("Nobody lives on")
+        roosevelt = c.get("/api/places", params={"lat": 40.7620, "lng": -73.9497})  # people live here
+        assert roosevelt.status_code == 200
+    rate_limiter.counter.clear()

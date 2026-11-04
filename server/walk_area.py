@@ -44,6 +44,25 @@ def load_boroughs(path=BOROUGHS_FILE):
     }
 
 
+# Islands where nobody lives (card 15), shared with scripts/build_grid.py.
+NOT_LIVED_ON_FILE = Path(__file__).parent / "geo" / "not_lived_on.json"
+
+
+def load_not_lived_on(path=NOT_LIVED_ON_FILE, boroughs_path=BOROUGHS_FILE):
+    """[(island name, its whole piece of land)] for each listed island: the
+    ring in boroughs.json that holds the island's point."""
+    islands = json.loads(Path(path).read_text())["islands"]
+    rings = [ring for rings in json.loads(Path(boroughs_path).read_text())["boroughs"].values() for ring in rings]
+    found = []
+    for name, (lat, lng) in islands.items():
+        for ring in rings:
+            land = shapely.make_valid(Polygon([(x, y) for y, x in ring]))
+            if land.contains(Point(lng, lat)):
+                found.append((name, land))
+                break
+    return found
+
+
 def load_land(path=BOROUGHS_FILE):
     """All five boroughs' land as one shape in (lng, lat), for trimming the area."""
     return shapely.make_valid(unary_union(list(load_boroughs(path).values())))

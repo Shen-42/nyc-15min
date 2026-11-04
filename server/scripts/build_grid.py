@@ -50,18 +50,12 @@ MAX_PLACE_LABEL_M = 600
 PARK_SAMPLES = 3
 PARK_SHARE = 0.5
 # Islands where nobody lives, left out of the grid like parks: the gaps and
-# best spots are about where people live. A point on each; the whole piece of
-# land around it is left out. (Clicks there still work.) Islands with no
-# paths at all, like the marshes in Jamaica Bay, drop out on their own.
+# best spots are about where people live. The server turns away clicks on
+# them too. Islands with no paths at all, like the marshes in Jamaica Bay,
+# drop out on their own.
 NOT_LIVED_ON = {
-    "Randalls and Wards Islands": (40.7929, -73.9255),
-    "Governors Island": (40.6889, -74.0168),
-    "Liberty Island": (40.6892, -74.0445),
-    "Ellis Island": (40.6990, -74.0396),
-    "Rikers Island": (40.7934, -73.8845),
-    "Hart Island": (40.8527, -73.7710),
-    "North Brother Island": (40.8008, -73.8990),
-    "South Brother Island": (40.7962, -73.8977),
+    name: tuple(point)
+    for name, point in json.loads((SERVER_DIR / "geo" / "not_lived_on.json").read_text())["islands"].items()
 }
 
 # Outlines sent to the site are rounded to 5 decimals, about 1 m.
