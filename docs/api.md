@@ -2,7 +2,7 @@
 
 Base URL: https://nyc-15min-api.onrender.com
 
-All routes take `lat`, `lng`, and optionally `minutes` (default 15, at most 30).
+All routes take `lat`, `lng`, and optionally `minutes` (default 15, at most 30). `lat` and `lng` must fall in a box around the five boroughs: latitude 40.47 to 40.93, longitude −74.27 to −73.68.
 
 | Route | Returns |
 | --- | --- |
@@ -17,7 +17,6 @@ All routes take `lat`, `lng`, and optionally `minutes` (default 15, at most 30).
 | `GET`, `PUT /api/profile` | The signed-in user's needs profile; `PUT` names the version it started from and gets 409 if it's out of date |
 | `DELETE /api/account` | Deletes the signed-in user's account and data |
 | `GET /api/admin/usage`, `POST /api/admin/refresh` | Admins only: search counts for the last 7 days, and starting the data refresh |
-| `GET /api/grid` | Every 100 m square of Manhattan with its category scores, plus each category's gaps and best spot (no `lat`/`lng`) |
 
 `/api/places` and `/api/reachable` also take `weights`, for example `weights=grocery:3,park:3,school:0`. Each weight is a whole number from 0 to 3, and categories left out keep their defaults. An unknown category, a weight out of range, or all weights at 0 returns 422 with a message saying what to fix.
 
@@ -25,7 +24,9 @@ All routes take `lat`, `lng`, and optionally `minutes` (default 15, at most 30).
 
 `/api/places`, `/api/area`, and `/api/reachable` take `mode`, either `walk` (the default) or `wheelchair`. In wheelchair mode `/api/places` also returns `barriers`, the corners in reach with no curb ramp.
 
-`/api/places` returns `score.rank`, the share of Manhattan's grid squares that score lower with the same weights, or `null` in wheelchair mode or with `at` set.
+`/api/places` returns `borough`, the borough the spot is in (`null` just off the shore), and `score.rank`, how the spot compares with the same weights: `{"city": 64, "borough": 70, "name": "Brooklyn"}`, the share of the city's and the borough's lived-in grid squares that score lower. It's `null` in wheelchair mode, with `at` set, or with `minutes` other than 15.
+
+The grid itself, which the score map and gap finder draw, isn't served by the API (card 15). It's in the map data release as one file per borough (`grid-brooklyn.json` and so on; see `server/scripts/build_grid.py` for the format), and the site serves copies under `/grid/`.
 
 The site requests `/api/places` and `/api/area` at the same time, so the panel fills in while the slower area is still being built. Recent results are cached by start node in memory, and walking areas are also saved in Redis for 30 days (`server/shared_cache.py`), so they survive the API sleeping. The `Server-Timing` header says `area-from-redis` when one was. Each visitor gets 30 searches a minute per route; over that, the API returns 429 with a `Retry-After` header and the panel says how many seconds to wait. On Render the counts are kept in a free Redis-compatible Key Value instance, so they survive the API sleeping; locally they are kept in memory (`server/rate_limit.py`).
 

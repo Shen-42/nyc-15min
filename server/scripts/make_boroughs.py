@@ -6,7 +6,8 @@ to the shoreline, as published by Code for Germany's Click That 'Hood:
 Save that file anywhere and run, from the server folder:
     python scripts/make_boroughs.py path/to/new-york-city-boroughs.geojson
 
-The output is committed: borough lines and shorelines barely change, so
+It writes geo/boroughs.json and the site's copy, client/src/data/boroughs.json.
+Both are committed: borough lines and shorelines barely change, so
 this only needs running again to change the detail. It uses the standard
 library only.
 
@@ -19,7 +20,9 @@ import math
 import sys
 from pathlib import Path
 
-OUTPUT_FILE = Path(__file__).resolve().parent.parent / "geo" / "boroughs.json"
+SERVER_DIR = Path(__file__).resolve().parent.parent
+# The server's copy, and the site's.
+OUTPUT_FILES = [SERVER_DIR / "geo" / "boroughs.json", SERVER_DIR.parent / "client" / "src" / "data" / "boroughs.json"]
 
 # Outlines are straightened to within this many meters: about the width of
 # a sidewalk, and a quarter of the points of the full detail.
@@ -124,8 +127,7 @@ def main():
         rings.sort(key=lambda ring: -area_m2([to_m(lng, lat) for lat, lng in ring]))  # biggest first
         boroughs[name] = rings
 
-    OUTPUT_FILE.parent.mkdir(exist_ok=True)
-    OUTPUT_FILE.write_text(json.dumps({
+    text = json.dumps({
         "meta": {
             "source": "NYC Department of City Planning borough boundaries (clipped to shoreline), via Click That 'Hood",
             "simplify_m": SIMPLIFY_M,
@@ -133,11 +135,13 @@ def main():
             "format": "boroughs: {name: [ring of [lat, lng], ...]}, outer rings only, biggest first",
         },
         "boroughs": dict(sorted(boroughs.items())),
-    }, separators=(",", ":")))
-    size_kb = OUTPUT_FILE.stat().st_size / 1000
+    }, separators=(",", ":"))
+    for out in OUTPUT_FILES:
+        out.parent.mkdir(exist_ok=True)
+        out.write_text(text)
+        print(f"Saved {out} ({out.stat().st_size / 1000:.0f} KB)")
     for name, rings in sorted(boroughs.items()):
         print(f"{name:14} {len(rings):3} pieces of land, {sum(len(r) for r in rings):6,} points")
-    print(f"Saved {OUTPUT_FILE} ({size_kb:.0f} KB)")
 
 
 if __name__ == "__main__":

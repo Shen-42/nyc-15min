@@ -24,7 +24,8 @@ client/                    React site
   src/components/          map, results panel, category rows, place and corner markers,
                            the time, "Your needs", and "Map view" sections, the grid layer
   src/data/                categories, needs presets, New York time, heat map colors and image,
-                           Manhattan boundary
+                           the boroughs' land and the city's outline, loading the grid files
+  scripts/fetch-grid.mjs   copies the grid files into public/grid/ before dev and build
   src/hooks.js             media query hook (phone or desktop layout)
   src/account/             sign-in, account, and admin dialogs, saving places and profiles
   src/styles/              tokens, base, layout, panel, and map CSS
@@ -38,13 +39,14 @@ server/                    FastAPI API
   scoring.py               the 0–100 score, with custom weights
   hours.py                 whether a place is open at a given time
   modes.py                 walking and wheelchair speeds, curb ramp penalty
-  grid.py                  the scored Manhattan grid, and ranking a spot against it
+  grid.py                  the scored city grid, and ranking a spot against its borough and the city
   accounts.py              sign-in checks, saved places, profiles, roles, admin routes
   auth.py, store.py        checking Supabase tokens; reading and writing the tables
   usage.py                 daily request counts for the admin page
   scripts/                 downloads (graph, water, places, curb ramps), the grid, the data check,
-                           and get_data.py, which fetches the data release
-  geo/                     the five boroughs' land, and Manhattan's outline for the grid (committed)
+                           get_data.py, which fetches the data release, and time_live.py,
+                           which times the live site
+  geo/                     the five boroughs' land and the city's legal outline (committed)
   data/                    the map data, from a GitHub release (not in git)
   data-release.json        which release the map data comes from, with each file's fingerprint
   test_*.py                tests
@@ -88,7 +90,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. In development, Vite forwards requests that start with `/api` to `localhost:8000` (see `client/vite.config.js`).
+Open http://localhost:5173. In development, Vite forwards requests that start with `/api` to `localhost:8000` (see `client/vite.config.js`). Before starting, `npm run dev` (and `npm run build`) copies the grid files for the score map into `client/public/grid/` (`client/scripts/fetch-grid.mjs`), from `server/data/` when they match the release, or else from the release itself.
 
 **4. Accounts (optional).** Without these settings the site runs as before, with no sign-in.
 
@@ -102,7 +104,17 @@ Open http://localhost:5173. In development, Vite forwards requests that start wi
 
 The map data for the five boroughs is about 50 MB and replaced every month, so it isn't kept in git. It's in the repo's GitHub releases, and `server/data-release.json`, which is in git, names the release in use and each file's SHA-256 fingerprint. `server/scripts/get_data.py` downloads the files that are missing or different and checks each one; Render's build, the test job, and local setup all run it.
 
-A GitHub Actions job (`.github/workflows/refresh-data.yml`) rebuilds the data on the 1st of every month: it downloads everything again (OpenStreetMap from Overpass, curb ramps from NYC Open Data), checks that no count dropped by more than 15% (`server/scripts/check_data.py`), runs the tests, and scores the Manhattan grid again. Then it uploads the files as a new release (`data-YYYY-MM-DD-N`), commits `data-release.json` naming it, which makes Render redeploy, and deletes all but the three newest data releases. It takes about 2.5 hours, mostly waiting for Overpass. Run it by hand from the repo's **Actions** tab under **Refresh map data**. If it fails partway, **Re-run failed jobs** reuses the pieces it already downloaded. Its results table is on the run's summary page.
+A GitHub Actions job (`.github/workflows/refresh-data.yml`) rebuilds the data on the 1st of every month: it downloads everything again (OpenStreetMap from Overpass, curb ramps from NYC Open Data), checks that no count dropped by more than 15% (`server/scripts/check_data.py`), runs the tests, and scores the city grid again. Then it uploads the files as a new release (`data-YYYY-MM-DD-N`), commits `data-release.json` naming it, which makes Render redeploy both the API and the site, and deletes all but the three newest data releases. It takes about 4 hours, mostly waiting for Overpass. If it fails partway, **Re-run failed jobs** reuses the pieces it already downloaded. Its results table is on the run's summary page.
+
+Run it by hand from the repo's **Actions** tab under **Refresh map data**, choosing **What to rebuild**:
+
+| Choice | Rebuilds | Keeps from the current release | Time |
+| --- | --- | --- | --- |
+| everything | streets, lakes, places, curb ramps, grid | nothing | about 4 hours |
+| places and grid | lakes, places, park and other outlines, grid | streets, curb ramps | under 1.5 hours |
+| grid only | grid | everything else | about 5 minutes |
+
+**Grid only** is for changes to `build_grid.py`; **places and grid** for changes to what counts as a place or as land where nobody lives (`osm_places.py`, `build_amenities.py`).
 
 To rebuild by hand:
 
@@ -114,16 +126,21 @@ python scripts/build_graph.py      # walking network (about 2 hours)
 python scripts/build_water.py      # lakes and ponds
 python scripts/build_amenities.py  # places and park outlines
 python scripts/build_ramps.py      # curb ramps from NYC Open Data (after build_graph.py)
-python scripts/build_grid.py       # score every 100 m of Manhattan (after all the others)
+python scripts/build_grid.py       # score every 100 m of the city (after all the others, about 3 minutes)
 ```
 
-The city is downloaded in pieces of at most 50 km², about 25 requests for the streets and 25 for places and lakes, which `build_water.py` and `build_amenities.py` share (`server/scripts/osm_places.py`). Public Overpass servers are often busy. Each download retries up to 20 times with growing waits (30 s to 5 minutes), alternating between servers (`server/scripts/overpass.py`). Finished pieces are cached in `server/cache/`, whichever server sent them, so a script that fails partway can be run again. Running this on a slow or unsteady connection can take many hours; the GitHub Actions job is the easier way. If the default servers are blocked where you are, choose another:
+The city is downloaded in pieces of at most 50 km², about 40 requests for the streets and 40 for places and lakes, which `build_water.py` and `build_amenities.py` share (`server/scripts/osm_places.py`). Public Overpass servers are often busy. Each download retries up to 20 times with growing waits (30 s to 5 minutes), alternating between servers (`server/scripts/overpass.py`). Finished pieces are cached in `server/cache/`, whichever server sent them, so a script that fails partway can be run again. Running this on a slow or unsteady connection can take many hours; the GitHub Actions job is the easier way. If the default servers are blocked where you are, choose another:
 
 ```bash
 OVERPASS_URL=https://overpass.kumi.systems/api python scripts/build_water.py
 ```
 
-The land of the five boroughs, cut to the shoreline, is in `server/geo/boroughs.json`, made by `server/scripts/make_boroughs.py` from the Department of City Planning's borough boundaries. It's in git, since it barely changes. `server/geo/manhattan-boundary.json` is a copy of `client/src/data/manhattan-boundary.json`, used by the Manhattan grid. If you change one, copy it over.
+Two outlines of the city are in git, since they barely change, with copies for the site in `client/src/data/`:
+
+- `server/geo/boroughs.json`: each borough's land, cut to the shoreline, made by `server/scripts/make_boroughs.py` from the Department of City Planning's borough boundaries. Walking areas and the heat map are cut to it, and clicks off it are turned away.
+- `server/geo/city-outline.json`: the city's legal boundary, which runs through the water, made by `server/scripts/make_city_outline.py` from OpenStreetMap. The map greys out everything outside it.
+
+If you change one, the script writes the site's copy too; check that both changed.
 
 ## Tests
 
@@ -143,17 +160,19 @@ npm test
 The server tests cover:
 
 - Dijkstra on small made-up graphs, including the slower wheelchair speed and the extra minutes at corners without ramps
-- the nearest-node index, checked against testing every node, and the search, checked against the original pure-Python Dijkstra on the Manhattan graph
+- the nearest-node index, checked against testing every node, and the search, checked against the original pure-Python Dijkstra on the city graph; saving and loading the NumPy file
 - the walking area: block interiors filled, nothing drawn over the Hudson, Harlem Meer, or the Reservoir
-- places and scoring, including custom weights, categories set to 0, and closed places
+- the five boroughs' land: test spots land in the right borough, and the rivers and New Jersey are left out; unnamed parks, cemeteries, and other outlines are called by their kind
+- places and scoring, including custom weights, categories set to 0, and closed places; the NumPy place index, checked against checking every place
 - opening hours at different times and days
-- ranking a spot against the grid with different weights
+- ranking a spot against its borough and the city with different weights, leaving out park squares
 - the API routes, including bad `weights`, `at`, and `mode` values
 - the rate limit and the shared area cache, with a stand-in for Redis
+- `get_data.py`, with a local server standing in for GitHub: missing and changed files are downloaded, and a file that doesn't match its fingerprint is refused
 - accounts: missing, forged, expired, and wrong-project tokens; people only seeing and deleting their own places; the two-tab profile conflict; deleting an account; each admin route refused to users; and the exact requests sent to Supabase, with a fake server in place of it
 - unexpected errors: a crashing route answers with a plain message and a request id, keeps its security headers, and leaks nothing; bad input comes back as one sentence
 
-The site tests (Vitest, with jsdom standing in for the browser) cover the 70-second timeout, retrying the shaded area once, readable messages for every kind of failure, the **Try again** button and its focus, and the crash screens.
+The site tests (Vitest, with jsdom standing in for the browser) cover the 70-second timeout, retrying the shaded area once, readable messages for every kind of failure, the **Try again** button and its focus, the crash screens, decoding the grid files, and finding the borough a spot is in.
 
 ## Deploy (Render, free plan)
 
