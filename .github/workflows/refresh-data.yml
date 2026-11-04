@@ -66,7 +66,7 @@ jobs:
       # "Re-run failed jobs" picks up where it stopped instead of starting over.
       - name: Restore this run's downloads
         if: env.SCOPE != 'grid only'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: server/cache
           key: overpass-${{ github.run_id }}-${{ github.run_attempt }}
@@ -89,7 +89,7 @@ jobs:
 
       - name: Save this run's downloads
         if: always() && env.SCOPE != 'grid only'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: server/cache
           key: overpass-${{ github.run_id }}-${{ github.run_attempt }}
