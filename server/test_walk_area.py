@@ -6,7 +6,7 @@ from shapely.geometry import Point, shape
 from shapely.ops import unary_union
 
 from graph import WALK_SPEED_M_PER_MIN, WalkGraph
-from walk_area import Outlines, cut_path, empty_islands, load_boroughs, load_land, load_water, walking_area
+from walk_area import Outlines, cut_path, empty_islands, row_runs, load_boroughs, load_land, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.npz"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
@@ -182,3 +182,39 @@ def test_islands_with_no_paths_are_found(tmp_path):
     name, land = found[0]
     assert name is None
     assert land.contains(Point(-73.875, 40.055))
+
+
+def test_row_runs_cover_the_marked_squares_once():
+    import numpy as np
+
+    marked = np.array([[0, 1, 1, 0], [0, 1, 1, 1], [1, 0, 0, 1]], dtype=bool)
+    rects = row_runs(marked)
+    covered = np.zeros(marked.shape, dtype=int)
+    for col0, row0, col1, row1 in rects:
+        covered[row0:row1, col0:col1] += 1
+    assert (covered == marked).all()
+
+
+def test_area_of_one_street_walked_partway():
+    """Card 15: the area drawn on a grid of squares. A straight street east
+    from corner 1 through corner 2 (800 m) to corner 3 (800 m more). The walk
+    reaches corner 2 at minute 10, so with 5 minutes left it gets 400 m
+    toward corner 3: a strip 1,200 m long and 80 m wide with round ends."""
+    import math
+
+    m_per_deg_lng = 111_320 * math.cos(math.radians(40.7))
+    east = 800 / m_per_deg_lng
+    g = WalkGraph(
+        [[1, 40.7, -74.0], [2, 40.7, -74.0 + east], [3, 40.7, -74.0 + 2 * east]],
+        [[1, 2, 800.0, [[40.7, -74.0 + east / 2]]], [2, 3, 800.0]],
+    )
+    area = shape(walking_area(g, 1, {1: 0.0, 2: 10.0}, 15, 80, cell_m=5))
+    assert contains(area, 40.7, -74.0 + 1100 / m_per_deg_lng)
+    assert not contains(area, 40.7, -74.0 + 1300 / m_per_deg_lng)
+    assert contains(area, 40.7 + 30 / 110_540, -74.0 + 600 / m_per_deg_lng)  # 30 m off the street
+    assert not contains(area, 40.7 + 50 / 110_540, -74.0 + 600 / m_per_deg_lng)  # 50 m off it
+    # The squares the street passes through are marked whole, so the strip
+    # comes out up to half a square (2.5 m) wider on each side: about 6%
+    # here, under 1% for a real walk, whose outline is short for its area.
+    expected_m2 = 1200 * 80 + math.pi * 40**2
+    assert 0.97 < area.area * m_per_deg_lng * 110_540 / expected_m2 < 1.10

@@ -1,18 +1,28 @@
 """Turn the result of the 15-minute search into a shape to draw on the map.
 
-Every street segment the search reached is drawn as a line, and each line is
-widened by BUFFER_M on both sides. Joined together, they cover the streets
-you can walk on plus the buildings along them. The result is then trimmed to
-the city's shoreline with lakes and ponds cut out, so it never covers water.
+Every street segment the search reached is widened by BUFFER_M on both
+sides. Joined together, they cover the streets you can walk on plus the
+buildings along them. The result is then trimmed to the city's shoreline
+with lakes and ponds cut out, so it never covers water.
+
+The widening is done on a grid of CELL_M squares in NumPy rather than with
+shapely (card 15): mark the squares the reached streets pass through, grow
+the marks by BUFFER_M, fill the holes, and turn the marked squares into one
+shape. Widening each street with shapely and joining the results took about
+100 ms of CPU, which is over a second on Render's free plan (a tenth of a
+CPU). On the grid it takes about a sixth of that. scripts/time_area.py
+compares the two.
 """
 
 import json
 import math
 from pathlib import Path
 
+import numpy as np
 import shapely
+from scipy import ndimage
 from shapely import STRtree
-from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box, mapping, shape
+from shapely.geometry import MultiPolygon, Point, Polygon, box, mapping, shape
 from shapely.ops import unary_union
 
 # How far on each side of a street the shape extends. 40 m covers the
@@ -22,11 +32,17 @@ BUFFER_M = 40
 # Straighten the outline to within this many meters, to send fewer points.
 SIMPLIFY_M = 5
 
-# Points used to round each corner of a widened street (per quarter circle).
-# 2 is enough at street scale and keeps the shape light to build and send.
+# Points used to round each corner of a widened street (per quarter circle),
+# for the old way of widening in scripts/time_area.py.
 QUAD_SEGS = 2
 
 M_PER_DEG_LAT = 110_540
+
+# The grid the shape is drawn on. Measured on Nov 4 (scripts/time_area.py),
+# for five spots on a laptop: 10 m squares took 65 ms in all against 427 ms
+# for widening each street, and moved the outline by 1-1.4% of the area,
+# a few meters along its edge. 5 m squares took 181 ms and moved it 0.6-1.1%.
+CELL_M = 10
 
 # The land of the five boroughs (card 15), made by scripts/make_boroughs.py.
 BOROUGHS_FILE = Path(__file__).parent / "geo" / "boroughs.json"
@@ -152,60 +168,47 @@ def load_water(path):
     return [(w["name"], shapely.make_valid(shape(w["geometry"]))) for w in items]
 
 
-def walking_area(graph, start, times, max_minutes, speed_m_per_min, land=None):
+def walking_area(graph, start, times, max_minutes, speed_m_per_min, land=None, cell_m=CELL_M):
     """GeoJSON geometry of everywhere reachable within max_minutes.
 
     times: {node_id: minutes} from WalkGraph.reachable_within.
     land: if given, the area is trimmed to it, so the 40 m widening along a
     path by a river or lake doesn't spill over the water. Pass the city's
     shoreline with lakes and ponds already cut out.
+    cell_m: the grid's square size in meters.
     """
-    # Work in meters around the start point, so buffering by 40 means 40 m.
+    # Work in meters around the start point, so widening by 40 means 40 m.
     lat0, lng0 = graph.coords[start]
     m_per_deg_lng = 111_320 * math.cos(math.radians(lat0))
+    points = reached_points(graph, times, max_minutes, speed_m_per_min, cell_m / 2)
+    xy = np.column_stack([(points[:, 1] - lng0) * m_per_deg_lng, (points[:, 0] - lat0) * M_PER_DEG_LAT])
+    xy = np.vstack([xy, [[0.0, 0.0]]])  # the start, in case nothing else was reached
 
-    def to_xy(point):
-        lat, lng = point
-        return ((lng - lng0) * m_per_deg_lng, (lat - lat0) * M_PER_DEG_LAT)
+    # Mark the squares the points fall in, grow the marks by BUFFER_M in
+    # every direction, and fill the holes (block interiors, lawns, plazas;
+    # lakes are cut out by `land` below).
+    pad = BUFFER_M + 2 * cell_m
+    x0, y0 = xy.min(axis=0) - pad
+    x1, y1 = xy.max(axis=0) + pad
+    marked = np.zeros((int((y1 - y0) // cell_m) + 1, int((x1 - x0) // cell_m) + 1), dtype=bool)
+    marked[((xy[:, 1] - y0) // cell_m).astype(int), ((xy[:, 0] - x0) // cell_m).astype(int)] = True
+    r = int(round(BUFFER_M / cell_m))
+    dy, dx = np.mgrid[-r : r + 1, -r : r + 1]
+    marked = ndimage.binary_dilation(marked, structure=dx * dx + dy * dy <= r * r)
+    marked = ndimage.binary_fill_holes(marked)
 
-    def path_xy(u, v):
-        return [to_xy(p) for p in graph.edge_points(u, v)]
-
-    segments = []
-    done = set()
-    for u, t in times.items():
-        for v, length_m in graph.neighbors(u):
-            if v in times:
-                # Both ends reached: draw the whole path, once.
-                key = (min(u, v), max(u, v))
-                if key in done:
-                    continue
-                done.add(key)
-                segments.append(path_xy(u, v))
-            else:
-                # Only u reached: draw as far toward v as the time left allows.
-                meters_left = (max_minutes - t) * speed_m_per_min
-                if meters_left <= 0 or length_m <= 0:
-                    continue
-                segments.append(cut_path(path_xy(u, v), min(meters_left / length_m, 1.0)))
-
-    segments = [s for s in segments if len(s) >= 2 and s[0] != s[-1]]
-    if segments:
-        # Widen each segment on its own, then merge them all at once.
-        # Buffering one big MultiLineString does the same thing but is much
-        # slower, because it works out every crossing between segments first.
-        widened = shapely.buffer([LineString(s) for s in segments], BUFFER_M, quad_segs=QUAD_SEGS)
-        lines = shapely.union_all(widened)
-    else:
-        lines = Point(0, 0).buffer(BUFFER_M, quad_segs=QUAD_SEGS)
-
-    lines = fill_holes(lines).simplify(SIMPLIFY_M)
+    # Squares to rectangles (runs along a row, stacked while the next row
+    # has the same run), then one shape. Corners are straightened to a
+    # little under a square, so the outline doesn't step.
+    rects = np.array(row_runs(marked), dtype=float).reshape(-1, 4) * cell_m
+    joined = shapely.union_all(shapely.box(x0 + rects[:, 0], y0 + rects[:, 1], x0 + rects[:, 2], y0 + rects[:, 3]))
+    lines = joined.simplify(max(SIMPLIFY_M, 0.75 * cell_m))
 
     # Back from meters to longitude/latitude, the order GeoJSON uses.
-    def to_lnglat(xy):
-        out = xy.copy()
-        out[:, 0] = lng0 + xy[:, 0] / m_per_deg_lng
-        out[:, 1] = lat0 + xy[:, 1] / M_PER_DEG_LAT
+    def to_lnglat(coords):
+        out = coords.copy()
+        out[:, 0] = lng0 + coords[:, 0] / m_per_deg_lng
+        out[:, 1] = lat0 + coords[:, 1] / M_PER_DEG_LAT
         return out
 
     area = shapely.transform(lines, to_lnglat)
@@ -215,6 +218,86 @@ def walking_area(graph, start, times, max_minutes, speed_m_per_min, land=None):
         nearby_land = land.intersection(box(*area.bounds))
         area = polygons_only(area.intersection(nearby_land))
     return mapping(area)
+
+
+def reached_points(graph, times, max_minutes, speed_m_per_min, step_m):
+    """(lat, lng) points every step_m meters or closer along everything the
+    walk reaches: whole streets between two reached corners, and the part of
+    a street a walk gets along before time runs out."""
+    n = len(graph.ids)
+    minutes = np.full(n, np.inf)
+    if times:
+        minutes[np.searchsorted(graph.ids, np.fromiter(times.keys(), dtype=np.int64, count=len(times)))] = np.fromiter(
+            times.values(), dtype=np.float64, count=len(times)
+        )
+    reached = np.isfinite(minutes)
+    edges = np.flatnonzero(reached[graph.edge_a] | reached[graph.edge_b])
+    if not len(edges):
+        return np.empty((0, 2))
+    a, b = graph.edge_a[edges], graph.edge_b[edges]
+
+    # How far along each street the walk gets from each end, as a share of
+    # its length: all of it when both ends are reached.
+    length = graph.edge_length[edges]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        share_a = np.where(reached[a], np.clip((max_minutes - minutes[a]) * speed_m_per_min / length, 0, 1), -1.0)
+        share_b = np.where(reached[b], np.clip((max_minutes - minutes[b]) * speed_m_per_min / length, 0, 1), -1.0)
+    both = reached[a] & reached[b]
+    share_a[both | (length <= 0)] = 1.0
+
+    # Each street's points: its start corner, the curve between, its end corner.
+    curve_start = graph.shape_start[edges]
+    counts = graph.shape_start[edges + 1] - curve_start + 2
+    owner = np.repeat(np.arange(len(edges)), counts)
+    first = np.cumsum(counts) - counts
+    pos = np.arange(counts.sum()) - first[owner]
+    lat = np.where(pos == 0, graph.lat[a[owner]], graph.lat[b[owner]])
+    lng = np.where(pos == 0, graph.lng[a[owner]], graph.lng[b[owner]])
+    middle = (pos > 0) & (pos < counts[owner] - 1)
+    curve = graph.shape_points[curve_start[owner[middle]] + pos[middle] - 1]
+    lat[middle], lng[middle] = curve[:, 0], curve[:, 1]
+
+    # Pieces between consecutive points of the same street, in meters.
+    m_per_deg_lng = 111_320 * math.cos(math.radians(float(lat.mean())))
+    same = owner[:-1] == owner[1:]
+    piece_owner = owner[:-1][same]
+    ax, ay = lng[:-1][same] * m_per_deg_lng, lat[:-1][same] * M_PER_DEG_LAT
+    bx, by = lng[1:][same] * m_per_deg_lng, lat[1:][same] * M_PER_DEG_LAT
+    piece_m = np.hypot(bx - ax, by - ay)
+    street_m = np.bincount(piece_owner, weights=piece_m, minlength=len(edges))
+    before = np.cumsum(piece_m) - piece_m  # distance along all pieces to each piece's start
+    before -= (np.cumsum(street_m) - street_m)[piece_owner]  # ... along its own street
+
+    # Points along each piece, both ends included, then keep those within
+    # the share of the street the walk covers from either end.
+    steps = np.maximum(1, np.ceil(piece_m / step_m)).astype(int)
+    which = np.repeat(np.arange(len(piece_m)), steps + 1)
+    t = (np.arange(len(which)) - np.repeat(np.cumsum(steps + 1) - (steps + 1), steps + 1)) / steps[which]
+    along = before[which] + t * piece_m[which]
+    total = street_m[piece_owner[which]]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        share = np.where(total > 0, along / total, 0.0)
+    street = piece_owner[which]
+    keep = (share <= share_a[street] + 1e-9) | (1 - share <= share_b[street] + 1e-9)
+    lat_out = lat[:-1][same][which] + t * (lat[1:][same][which] - lat[:-1][same][which])
+    lng_out = lng[:-1][same][which] + t * (lng[1:][same][which] - lng[:-1][same][which])
+    return np.column_stack([lat_out[keep], lng_out[keep]])
+
+
+def row_runs(marked):
+    """Cover the True squares of a 2D array with rectangles, as
+    [first column, first row, end column, end row] (ends exclusive)."""
+    rects, open_runs = [], {}
+    for row in range(marked.shape[0] + 1):
+        runs = set()
+        if row < marked.shape[0]:
+            change = np.diff(np.concatenate([[0], marked[row].astype(np.int8), [0]]))
+            runs = set(zip(np.flatnonzero(change == 1).tolist(), np.flatnonzero(change == -1).tolist()))
+        for run in [r for r in open_runs if r not in runs]:
+            rects.append([run[0], open_runs.pop(run), run[1], row])
+        for run in runs:
+            open_runs.setdefault(run, row)
+    return rects
 
 
 def fill_holes(geom):

@@ -78,7 +78,7 @@ shared_cache = None
 
 # Part of every shared-cache key. Bump it when walk_area.py changes how
 # areas are drawn, so areas drawn the old way aren't served.
-AREA_FORMAT = 1
+AREA_FORMAT = 2  # 2: drawn on a grid of squares (card 15)
 
 
 def peak_memory_mb():
