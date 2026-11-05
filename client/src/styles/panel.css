@@ -177,13 +177,15 @@
 
 /* ---- Time of day (card 10) ---- */
 
-/* It uses the same open/close style as "Your needs". Two in a row share one line. */
+/* "Open" and "Needs" are two closed lines in a row; they share one rule. */
 .needs + .needs {
   border-top: 0;
 }
 
+/* Any time / Now / Pick a time, with the slider under them only for Pick a time. */
 .time__buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
 }
 
@@ -210,11 +212,6 @@
   margin: 0;
   accent-color: var(--color-ink);
   cursor: pointer;
-}
-
-/* With Any time picked, the slider is grayed but still works: moving it picks an hour. */
-.time__slider--idle {
-  accent-color: var(--color-muted);
 }
 
 .time__ends {
@@ -266,6 +263,32 @@
 .needs__current {
   font-weight: 400;
   color: var(--color-muted);
+}
+
+/* "Change" at the end of the closed line says it opens; gone once open. */
+.needs__change {
+  margin-left: auto;
+  font-weight: 400;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.needs[open] > .needs__summary .needs__change {
+  display: none;
+}
+
+/* "Customize": the six importance menus, one more click in. */
+.needs__more-summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap-target);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.needs__more[open] > .needs__more-summary {
+  margin-bottom: var(--space-2);
 }
 
 .needs__body {
@@ -320,14 +343,22 @@
   padding: 0 var(--space-2);
 }
 
-.needs__select {
+/* Every menu (here, the gap finder's, and "Go to…" on the map) draws its
+   own arrow, so it sits the same distance inside the border in every
+   browser. The browser's own arrow ran into the right edge. */
+.needs__select,
+.map-select {
+  appearance: none;
   min-height: var(--tap-target);
-  padding: 0 var(--space-2);
+  padding: 0 calc(var(--space-3) + 12px + var(--space-2)) 0 var(--space-3);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  background: var(--color-surface)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%231f2430' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    no-repeat right var(--space-3) center;
   font: inherit;
-  color: inherit;
+  color: var(--color-ink);
+  cursor: pointer;
 }
 
 .needs__note {
@@ -422,12 +453,21 @@
   font-size: var(--text-sm);
 }
 
+/* "Show gaps for [Groceries]": the words on one line, the menu takes the rest. */
 .layer__select {
+  grid-template-columns: auto auto minmax(0, 1fr);
   padding: 0;
 }
 
-.layer__back {
-  align-self: flex-start;
+.layer__select .needs__label {
+  white-space: nowrap;
+}
+
+/* A select is as wide as its longest option unless told otherwise, which
+   pushed it out of the box. Fill the column instead. */
+.layer__select .needs__select {
+  width: 100%;
+  min-width: 0;
 }
 
 .legend {
@@ -512,7 +552,7 @@
   text-underline-offset: 3px;
 }
 
-/* Save this spot */
+/* Save spot */
 .save-spot {
   align-self: flex-start;
 }

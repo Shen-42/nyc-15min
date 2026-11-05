@@ -8,6 +8,7 @@ import AuthDialog from "./account/AuthDialog";
 import { useAccount } from "./account/useAccount";
 import { useAccountData } from "./account/useAccountData";
 import CityMap from "./components/CityMap";
+import MapView from "./components/MapView";
 import ResultsPanel from "./components/ResultsPanel";
 import { BOROUGHS, boroughAt, boxesOverlap, isInCity } from "./data/city";
 import { combineGrids, loadBoroughGrid, loadGridIndex } from "./data/grid";
@@ -120,7 +121,7 @@ export default function App() {
       return;
     }
     if (!Object.keys(gridIndex.files ?? {}).length) {
-      setGridError({ text: "The data for this view hasn't been published yet." });
+      setGridError({ text: "This map isn't available yet." });
       return;
     }
     for (const b of BOROUGHS) {
@@ -141,6 +142,13 @@ export default function App() {
     setMapView(next);
     const here = boroughAt(next.center);
     if (here) setBorough(here.name);
+  }
+
+  // The score map and gap finder explain themselves in the panel, so on
+  // phones a hidden sheet comes up far enough to show that.
+  function changeView(next) {
+    setView(next);
+    if (next !== "walk") setSheet((s) => (s === "hidden" ? "peek" : s));
   }
 
   function pickBorough(name) {
@@ -265,7 +273,7 @@ export default function App() {
     if (failed) {
       setMessage({
         kind: "warn",
-        text: "The shaded area couldn't be drawn. The score and places are still correct.",
+        text: "Couldn't draw the walking area. The score is still correct.",
         retry: () => {
           setMessage(null);
           fetchArea(query).then(
@@ -309,7 +317,7 @@ export default function App() {
       setSelectedPoint(null);
       setResult(null);
       setStatus("idle");
-      setMessage({ kind: "warn", text: "That spot isn't on land in the five boroughs. Choose a spot in the city." });
+      setMessage({ kind: "warn", text: "That's outside NYC. Pick a spot in the city." });
     }
   }
 
@@ -335,12 +343,9 @@ export default function App() {
         mode={mode}
         onModeChange={setMode}
         view={view}
-        onViewChange={setView}
         grid={grid}
-        gridIndex={gridIndex}
         borough={borough}
         boroughGrid={boroughGrid}
-        onPickBorough={pickBorough}
         gridError={gridError && { ...gridError, retry: () => setGridAttempt((n) => n + 1) }}
         gapCategory={gapCategory}
         onGapCategory={setGapCategory}
@@ -376,6 +381,7 @@ export default function App() {
         </>
       )}
       <div className="map-wrap" data-focus={focus ?? undefined}>
+        <MapView view={view} onChange={changeView} onPickBorough={pickBorough} />
         <ErrorBoundary name="map">
         <CityMap
           selectedPoint={selectedPoint}

@@ -44,9 +44,11 @@ usage = None
 rate_check = None  # main.check_rate_limit
 github = {"token": None, "repo": "Shen-42/nyc-15min", "workflow": "refresh-data.yml"}
 
-# The same box the search routes accept.
-LAT_RANGE = (40.6, 40.95)
-LNG_RANGE = (-74.1, -73.85)
+# The same box the search routes accept (main.py): the five boroughs since
+# card 15. It was still Manhattan's, so saving a spot in Staten Island or
+# eastern Queens failed.
+LAT_RANGE = (40.47, 40.93)
+LNG_RANGE = (-74.27, -73.68)
 
 
 def setup(usage_counter, rate_limit):
@@ -126,7 +128,7 @@ def add_place(place: PlaceIn, user=Depends(current_user)):
     if not 1 <= len(name) <= 60:
         raise HTTPException(status_code=422, detail="Give the place a name of 1 to 60 characters.")
     if not (LAT_RANGE[0] <= place.lat <= LAT_RANGE[1] and LNG_RANGE[0] <= place.lng <= LNG_RANGE[1]):
-        raise HTTPException(status_code=422, detail="That spot is outside Manhattan.")
+        raise HTTPException(status_code=422, detail="That's outside NYC.")
     if stored(store.count_places, user["id"]) >= MAX_PLACES:
         raise HTTPException(status_code=422, detail=f"You can save up to {MAX_PLACES} places. Remove one first.")
     return stored(store.add_place, user["id"], name, round(place.lat, 6), round(place.lng, 6))

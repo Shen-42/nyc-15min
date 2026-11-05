@@ -5,9 +5,9 @@
 // "one" is the singular, for sentences like "no grocery store within 15 minutes".
 export const CATEGORIES = [
   { id: "grocery", label: "Groceries", one: "grocery store", glyph: "G" },
-  { id: "subway", label: "Subway stations", one: "subway station", glyph: "T" },
+  { id: "subway", label: "Subway", one: "subway station", glyph: "T" },
   { id: "pharmacy", label: "Pharmacies", one: "pharmacy", glyph: "Rx" },
-  { id: "clinic", label: "Doctors and clinics", one: "doctor or clinic", glyph: "+" },
+  { id: "clinic", label: "Doctors", one: "doctor or clinic", glyph: "+" },
   { id: "park", label: "Parks", one: "park", glyph: "P" },
   { id: "school", label: "Schools", one: "school", glyph: "S" },
 ];
@@ -16,9 +16,9 @@ export const CATEGORY_BY_ID = Object.fromEntries(CATEGORIES.map((c) => [c.id, c]
 
 // One sentence for the overall score, so the number means something.
 export function verdict(score) {
-  if (score >= 90) return "Daily errands are all a short walk away.";
-  if (score >= 75) return "Most daily errands can be done on foot.";
-  if (score >= 50) return "Some daily errands can be done on foot.";
-  if (score >= 25) return "A few things are within walking distance.";
-  return "Little is within a 15-minute walk.";
+  if (score >= 90) return "Everything you need is a short walk away.";
+  if (score >= 75) return "Most errands are walkable.";
+  if (score >= 50) return "Some errands are walkable.";
+  if (score >= 25) return "A few things are walkable.";
+  return "Little is within walking distance.";
 }

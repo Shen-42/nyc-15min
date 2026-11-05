@@ -1,28 +1,30 @@
 import { BOROUGHS } from "../data/city";
 
-// Moves the map to a borough (card 15). The pressed button is the borough at
-// the middle of the map, which the score map and gap finder describe.
-export default function BoroughPicker({ borough, onPick }) {
+// "Go to…": moves the map to a borough (card 15). It always reads "Go to…",
+// so picking the borough already in view still moves back to its middle.
+export default function BoroughPicker({ onPick }) {
   return (
-    <div className="needs__presets" role="group" aria-label="Go to a borough">
+    <select
+      className="map-select"
+      value=""
+      aria-label="Go to a borough"
+      onChange={(event) => event.target.value && onPick(event.target.value)}
+    >
+      <option value="" disabled>
+        Go to…
+      </option>
       {BOROUGHS.map((b) => (
-        <button
-          key={b.name}
-          type="button"
-          className="needs__preset"
-          aria-pressed={borough === b.name}
-          onClick={() => onPick(b.name)}
-        >
+        <option key={b.name} value={b.name}>
           {b.name}
-        </button>
+        </option>
       ))}
-    </div>
+    </select>
   );
 }
 
-// "Better than 70% of Brooklyn and 64% of the city." from the API's rank.
+// "Better than 70% of Brooklyn and 64% of NYC." from the API's rank.
 export function rankText(rank) {
   if (!rank) return null;
-  if (rank.borough == null) return `Better than ${rank.city}% of the city.`;
-  return `Better than ${rank.borough}% of ${rank.name} and ${rank.city}% of the city.`;
+  if (rank.borough == null) return `Better than ${rank.city}% of NYC.`;
+  return `Better than ${rank.borough}% of ${rank.name} and ${rank.city}% of NYC.`;
 }

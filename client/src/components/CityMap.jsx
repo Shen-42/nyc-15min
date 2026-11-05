@@ -176,7 +176,7 @@ export default function CityMap({
       {stars.map(({ borough, spot }) => (
         <Marker key={borough} position={[spot.lat, spot.lng]} icon={STAR_ICON} keyboard={false}>
           <Tooltip direction="top" offset={[0, -16]} className="place-tooltip">
-            Best spot in {borough} for a new {CATEGORY_BY_ID[gapCategory].one}
+            Best spot for a new {CATEGORY_BY_ID[gapCategory].one}
             {spot.near ? `, near ${spot.near}` : ""}
           </Tooltip>
         </Marker>

@@ -12,8 +12,8 @@ export default function CategoryRow({ category, result, selected, onSelect, hour
   const detail = first
     ? `${placeName(first)}, ${formatMinutes(first.minutes)}`
     : hourLabel && closedCount
-      ? `None open within 15 minutes`
-      : "None within 15 minutes";
+      ? "None open within 15 min"
+      : "None within 15 min";
 
   return (
     <li>
@@ -47,7 +47,7 @@ export default function CategoryRow({ category, result, selected, onSelect, hour
             </span>
           </span>
         ) : (
-          <span className="category-row__off">Not counted</span>
+          <span className="category-row__off">Off</span>
         )}
       </button>
 

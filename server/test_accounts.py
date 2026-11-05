@@ -101,6 +101,13 @@ def test_save_list_and_remove_a_place(client):
     assert client.get("/api/saved-places", headers=signed_in(ALICE)).json()["places"] == []
 
 
+def test_places_anywhere_in_the_five_boroughs_can_be_saved(client):
+    """Card 15: the box was still Manhattan's, so these were refused."""
+    for name, lat, lng in [("Tottenville", 40.5089, -74.2366), ("Glen Oaks", 40.7465, -73.7120)]:
+        res = client.post("/api/saved-places", json={"name": name, "lat": lat, "lng": lng}, headers=signed_in(ALICE))
+        assert res.status_code == 201, res.json()
+
+
 def test_users_only_see_and_remove_their_own_places(client):
     place = client.post("/api/saved-places", json=HOME, headers=signed_in(ALICE)).json()
     assert client.get("/api/saved-places", headers=signed_in(BOB)).json()["places"] == []
@@ -113,7 +120,7 @@ def test_users_only_see_and_remove_their_own_places(client):
     [
         {**HOME, "name": "   "},  # blank
         {**HOME, "name": "x" * 61},  # too long
-        {**HOME, "lat": 41.5},  # far outside Manhattan
+        {**HOME, "lat": 41.5},  # far outside NYC
     ],
 )
 def test_bad_places_are_refused_with_a_message(client, body):

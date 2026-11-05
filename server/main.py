@@ -336,18 +336,18 @@ def plan_walk(request, kind, lat, lng, minutes, timer, mode="walk"):
     clicked = Point(lng, lat)  # shapely uses (x, y) = (lng, lat)
     on_island, name = islands.find(clicked)
     if on_island:
-        raise HTTPException(status_code=422, detail=f"Nobody lives on {name}. Choose a spot where people live.")
+        raise HTTPException(status_code=422, detail=f"Nobody lives on {name}. Pick a spot where people live.")
     on_empty_island, _ = empty_land.find(clicked)
     if on_empty_island:
-        raise HTTPException(status_code=422, detail="Nobody lives on this island. Choose a spot where people live.")
+        raise HTTPException(status_code=422, detail="Nobody lives on this island. Pick a spot where people live.")
     in_water, name = water.find(clicked)
     if in_water:
-        raise HTTPException(status_code=422, detail=f"That spot is in {name or 'the water'}. Choose a spot on land.")
+        raise HTTPException(status_code=422, detail=f"That's in {name or 'the water'}. Pick a spot on land.")
     in_park, name = parks.find(clicked)
     if in_park:
         raise HTTPException(
             status_code=422,
-            detail=f"That spot is in {name or 'a park'}. Choose a spot on a nearby street.",
+            detail=f"That's in {name or 'a park'}. Pick a spot on a nearby street.",
         )
 
     start, gap_m = graph.nearest_node(lat, lng)
@@ -356,7 +356,7 @@ def plan_walk(request, kind, lat, lng, minutes, timer, mode="walk"):
     if gap_m > MAX_START_GAP_M:
         raise HTTPException(
             status_code=422,
-            detail=f"That spot is {gap_m:.0f} m from the nearest street or path. Choose a spot closer to one.",
+            detail=f"That's {gap_m:.0f} m from the nearest street. Pick a spot closer to one.",
         )
 
     # The click is usually a few meters from the nearest node. Count that

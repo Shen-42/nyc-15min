@@ -117,3 +117,66 @@
   line-height: 1;
   box-shadow: 0 0 0 2px var(--color-ink), 0 1px 4px rgb(0 0 0 / 0.4);
 }
+
+/* ---- The map's own controls (MapView.jsx) ----
+   Floating over the top of the map. The row itself lets clicks through to
+   the map; only its buttons and menu catch them. */
+.map-toolbar {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  right: var(--space-3);
+  z-index: 1000; /* above the tiles and shapes, below the panel (1100) */
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.map-toolbar > * {
+  pointer-events: auto;
+  box-shadow: 0 1px 4px rgb(31 36 48 / 0.25);
+}
+
+/* Leaflet's zoom buttons go under the toolbar. --toolbar-space is measured
+   in MapView.jsx. The map credit in the top right stays put on wider
+   screens, where the toolbar doesn't reach it. */
+.map-wrap .leaflet-top.leaflet-left {
+  top: var(--toolbar-space, 0px);
+}
+
+@media (max-width: 767px) {
+  .map-wrap .leaflet-top.leaflet-right {
+    top: var(--toolbar-space, 0px);
+  }
+}
+
+/* Three views in one bar, the picked one dark, like the panel's toggles. */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.segmented__button {
+  min-height: var(--tap-target);
+  padding: 0 var(--space-3);
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.segmented__button + .segmented__button {
+  border-left: 1px solid var(--color-line);
+}
+
+.segmented__button[aria-pressed="true"] {
+  background: var(--color-ink);
+  color: var(--color-surface);
+}
+
+/* .map-select ("Go to…") shares its look with the panel's menus: panel.css. */

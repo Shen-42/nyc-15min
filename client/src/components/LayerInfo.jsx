@@ -1,40 +1,33 @@
 import { CATEGORIES, CATEGORY_BY_ID } from "../data/categories";
 import { HEAT_GRADIENT, HEAT_LEGEND } from "../data/grid";
-import BoroughPicker from "./BoroughPicker";
 
-// The heading, legend, and way back for the score map and gap finder (card 12).
-// Shown at the top of the panel while one of them is on. It describes the
-// borough at the middle of the map, and the picker moves to another (card 15).
+// The heading and legend for the score map and gap finder (card 12). Shown
+// at the top of the panel while one of them is on. It describes the borough
+// at the middle of the map (card 15); the buttons on the map switch views
+// and move between boroughs.
 export default function LayerInfo({
   view,
   grid,
   borough,
   boroughGrid,
-  onPickBorough,
   gridError,
   gapCategory,
   onGapCategory,
-  onBack,
 }) {
   const title = view === "heat" ? "Score map" : "Gap finder";
 
   return (
     <section className="layer" aria-labelledby="layer-title">
       <h2 id="layer-title" className="layer__title">
-        {title}
+        {title}: {borough}
       </h2>
 
-      <BoroughPicker borough={borough} onPick={onPickBorough} />
-
       {/* A failure to load shows with the panel's other messages (card 14). */}
-      {!boroughGrid && !gridError && <p className="needs__note">Loading map data for {borough}…</p>}
+      {!boroughGrid && !gridError && <p className="needs__note">Loading {borough}…</p>}
 
       {grid && view === "heat" && (
         <>
-          <p className="layer__text">
-            Scores across the city for a 15-minute walk, weighted by your needs. Parks show the scores of
-            the blocks around them. Click a street for details.
-          </p>
+          <p className="layer__text">How walkable each block is, based on your needs. Click a street to see its score.</p>
           {/* A gradient bar with numbers under it and words at both ends, so
               the colors never have to be told apart alone. */}
           <figure className="legend">
@@ -61,10 +54,6 @@ export default function LayerInfo({
       {boroughGrid && view === "gaps" && (
         <GapText grid={boroughGrid} borough={borough} categoryId={gapCategory} onCategory={onGapCategory} />
       )}
-
-      <button type="button" className="needs__preset layer__back" onClick={onBack}>
-        Back to your walk
-      </button>
     </section>
   );
 }
@@ -82,7 +71,7 @@ function GapText({ grid, borough, categoryId, onCategory }) {
         <span className={`glyph cat-${categoryId}`} aria-hidden="true">
           {category.glyph}
         </span>
-        <span className="needs__label">Show gaps in</span>
+        <span className="needs__label">Show gaps for</span>
         <select className="needs__select" value={categoryId} onChange={(e) => onCategory(e.target.value)}>
           {CATEGORIES.map((c) => (
             <option key={c.id} value={c.id}>
@@ -94,22 +83,20 @@ function GapText({ grid, borough, categoryId, onCategory }) {
 
       {gap.cells === 0 ? (
         <p className="layer__text">
-          No gaps: every part of {borough} has a {category.one} within a 15-minute walk.
+          Every part of {borough} has a {category.one} within a 15-minute walk.
         </p>
       ) : (
         <>
           <p className="layer__text">
-            In {borough},{" "}
             <strong>
               {gap.cells.toLocaleString()} of {total.toLocaleString()}
             </strong>{" "}
-            areas (100 m squares, parks excluded) have no {category.one} within a 15-minute walk. They're
-            shaded on the map.
+            blocks in {borough} have no {category.one} within a 15-minute walk. They're shaded on the map.
           </p>
           {best && (
             <p className="layer__text">
-              A new {category.one} {where} would put <strong>{best.fixes.toLocaleString()}</strong> of these
-              areas, or their neighbors across the borough line, within a 15-minute walk (★ on the map).
+              The best spot for a new one (★) is {where}. It would reach{" "}
+              <strong>{best.fixes.toLocaleString()}</strong> blocks that have none.
             </p>
           )}
         </>

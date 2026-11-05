@@ -22,7 +22,7 @@ client/                    React site
   src/App.jsx              state, requests, and layout
   src/api.js               API address and request helper
   src/components/          map, results panel, category rows, place and corner markers,
-                           the time, "Your needs", and "Map view" sections, the grid layer
+                           the time and "Needs" settings, the map's view switch, the grid layer
   src/data/                categories, needs presets, New York time, heat map colors and image,
                            the boroughs' land and the city's outline, loading the grid files
   scripts/fetch-grid.mjs   copies the grid files into public/grid/ before dev and build
@@ -178,7 +178,7 @@ The site tests (Vitest, with jsdom standing in for the browser) cover the 70-sec
 
 `render.yaml` defines three services, created together in the Render dashboard under **New > Blueprint**:
 
-- **nyc-15min-api**: the FastAPI server. 512 MB of memory and 0.1 CPU. Its build downloads the map data release named in `server/data-release.json`. It sleeps after 15 minutes without visits; the site shows "Waking up the server" while it starts again.
+- **nyc-15min-api**: the FastAPI server. 512 MB of memory and 0.1 CPU. Its build downloads the map data release named in `server/data-release.json`. It sleeps after 15 minutes without visits; the site shows "Starting up. This can take up to a minute…" while it starts again.
 - **nyc-15min**: the built React site, served as static files. Always on.
 - **nyc-15min-limits**: a free Key Value (Redis-compatible) instance for rate-limit counts and saved walking areas, reachable only from the API. When its 25 MB fill up, it drops the least recently used keys.
 

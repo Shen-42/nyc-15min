@@ -20,12 +20,13 @@ export const CITY_BOUNDS = [
   [40.97, -73.65],
 ];
 
-// A big box around the city. The mask is this box with the city's outline cut out.
+// The whole world. The mask is this with the city's outline cut out, so
+// everything outside the city is grey however far the map is zoomed out.
 export const OUTER_RING = [
-  [40.3, -74.5],
-  [40.3, -73.5],
-  [41.1, -73.5],
-  [41.1, -74.5],
+  [-85, -180],
+  [-85, 180],
+  [85, 180],
+  [85, -180],
 ];
 
 function boundsOf(rings) {

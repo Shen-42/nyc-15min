@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { errorText } from "./errors";
 
-// "Save this spot", next to the score it saves (card 13). Signed out, it
-// asks to sign in first.
+// "Save spot", a link-style button under the score it saves (card 13).
+// Signed out, it asks to sign in first.
 export default function SaveSpot({ point, account, onNeedSignIn, onSaved }) {
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
@@ -22,10 +22,10 @@ export default function SaveSpot({ point, account, onNeedSignIn, onSaved }) {
     return (
       <button
         type="button"
-        className="button save-spot"
+        className="button button--link save-spot"
         onClick={() => (account.session ? setNaming(true) : onNeedSignIn("Sign in to save places."))}
       >
-        Save this spot
+        Save spot
       </button>
     );
   }

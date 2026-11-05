@@ -7,7 +7,7 @@ export default function SavedPlaces({ places, onGo, onRemove }) {
       </summary>
       <div className="needs__body">
         {places.length === 0 ? (
-          <p className="needs__note">Nothing saved yet. Use “Save this spot” under a score.</p>
+          <p className="needs__note">Nothing saved yet. Use “Save spot” under a score.</p>
         ) : (
           <ul className="saved-list">
             {places.map((place) => (
