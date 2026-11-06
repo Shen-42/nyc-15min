@@ -10,7 +10,7 @@ import { useAccountData } from "./account/useAccountData";
 import CityMap from "./components/CityMap";
 import MapView from "./components/MapView";
 import ResultsPanel from "./components/ResultsPanel";
-import { BOROUGHS, boroughAt, boxesOverlap, isInCity } from "./data/city";
+import { BOROUGHS, boroughAt, boxesOverlap, isInCityLimits } from "./data/city";
 import { combineGrids, loadBoroughGrid, loadGridIndex } from "./data/grid";
 import { loadMode, loadWeights, saveMode, saveWeights, weightsToQuery } from "./data/profiles";
 import { atQuery, formatHour, nycNow } from "./data/time";
@@ -308,7 +308,8 @@ export default function App() {
     setFocus(null);
     setView("walk"); // a click asks about one spot, so go back to your walk
     setSheet((s) => (s === "hidden" ? "peek" : s)); // and its score should show
-    if (isInCity(point)) {
+    // Rivers and bays inside the city go to the server too, which names them.
+    if (isInCityLimits(point)) {
       setSelectedPoint(point);
       findWalkingArea(point);
     } else {

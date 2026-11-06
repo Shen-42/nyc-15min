@@ -14,8 +14,8 @@ export const VIEWS = [
 export default function MapView({ view, onChange, onPickBorough }) {
   const ref = useRef(null);
 
-  // Leaflet's zoom buttons and credit sit in the map's top corners. Move
-  // them below the toolbar, however many rows it wraps to.
+  // Leaflet's zoom buttons sit in the map's top left corner. Move them
+  // below the toolbar, however many rows it wraps to.
   useLayoutEffect(() => {
     const toolbar = ref.current;
     const wrap = toolbar?.parentElement;

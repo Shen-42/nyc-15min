@@ -87,6 +87,13 @@ export function isInCity(point) {
   return boroughAt(point) !== null;
 }
 
+// Inside the city's limits, which run through the rivers and bays: on land,
+// or in the water the city takes in. A click in the water is still sent to
+// the server, which says which river or bay it is.
+export function isInCityLimits(point) {
+  return CITY_OUTLINE.some((ring) => isInsidePolygon(point, ring));
+}
+
 // Do two [[south, west], [north, east]] boxes overlap?
 export function boxesOverlap([[s1, w1], [n1, e1]], [[s2, w2], [n2, e2]]) {
   return s1 <= n2 && s2 <= n1 && w1 <= e2 && w2 <= e1;

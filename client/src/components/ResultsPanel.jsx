@@ -155,16 +155,17 @@ export default function ResultsPanel({
                 </>
               )}
             </p>
+            {/* Under the text, beside the number, so it adds no row of its own. */}
+            {account.enabled && selectedPoint && (
+              <SaveSpot
+                key={selectedPoint.join(",")}
+                point={selectedPoint}
+                account={account}
+                onNeedSignIn={onSignIn}
+                onSaved={onPlaceSaved}
+              />
+            )}
           </div>
-          {account.enabled && result && selectedPoint && (
-            <SaveSpot
-              key={selectedPoint.join(",")}
-              point={selectedPoint}
-              account={account}
-              onNeedSignIn={onSignIn}
-              onSaved={onPlaceSaved}
-            />
-          )}
         </div>
       )}
       </div>

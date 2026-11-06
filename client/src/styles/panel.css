@@ -38,7 +38,7 @@
 /* The number takes column 1, every line of text column 2, however many lines. */
 .score-summary__number {
   grid-column: 1;
-  grid-row: 1 / span 3;
+  grid-row: 1 / span 4;
   font-size: var(--text-score);
   font-weight: 700;
   line-height: 1;
@@ -552,9 +552,12 @@
   text-underline-offset: 3px;
 }
 
-/* Save spot */
+/* Save spot: a text link under the score's last line. 32 px tall is past
+   WCAG's 24 px minimum and keeps the score block short. */
 .save-spot {
-  align-self: flex-start;
+  justify-self: start;
+  min-height: 32px;
+  padding: 0;
 }
 
 .save-spot__form {
@@ -789,4 +792,43 @@
 /* The map's crash screen fills the map's space. */
 .map-wrap > .crash {
   height: 100%;
+}
+
+/* ---- Phones: the sheet's top (handle, title, score) is what shows over the
+   map, so it's kept short: tighter spacing, a smaller number and title. ---- */
+@media (max-width: 767px) {
+  .panel__top,
+  .panel__peek {
+    gap: var(--space-2);
+  }
+
+  .sheet-handle {
+    min-height: 32px;
+    margin-bottom: 0;
+  }
+
+  .panel__title {
+    font-size: var(--text-sm);
+  }
+
+  .panel__header .button--link {
+    min-height: 32px;
+    font-size: var(--text-sm);
+  }
+
+  .score-summary {
+    column-gap: var(--space-3);
+  }
+
+  .score-summary__number {
+    font-size: 2.75rem;
+  }
+
+  .score-summary__verdict {
+    font-size: var(--text-base);
+  }
+
+  .score-summary__rank {
+    font-size: var(--text-sm);
+  }
 }

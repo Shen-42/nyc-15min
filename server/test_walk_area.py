@@ -6,7 +6,7 @@ from shapely.geometry import Point, shape
 from shapely.ops import unary_union
 
 from graph import WALK_SPEED_M_PER_MIN, WalkGraph
-from walk_area import Outlines, cut_path, empty_islands, row_runs, load_boroughs, load_land, load_water, walking_area
+from walk_area import Outlines, cut_path, empty_islands, row_runs, water_phrase, load_boroughs, load_land, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.npz"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
@@ -218,3 +218,13 @@ def test_area_of_one_street_walked_partway():
     # here, under 1% for a real walk, whose outline is short for its area.
     expected_m2 = 1200 * 80 + math.pi * 40**2
     assert 0.97 < area.area * m_per_deg_lng * 110_540 / expected_m2 < 1.10
+
+
+def test_water_is_named_the_way_people_say_it():
+    """Card 15: "That's in the East River", "That's in Jamaica Bay"."""
+    assert water_phrase("East River", 40.706, -73.996) == "the East River"
+    assert water_phrase("Arthur Kill", 40.56, -74.24) == "the Arthur Kill"
+    assert water_phrase("Jamaica Bay", 40.61, -73.84) == "Jamaica Bay"
+    assert water_phrase("Long Island Sound", 40.85, -73.75) == "Long Island Sound"
+    assert water_phrase(None, 40.55, -73.85) == "the Atlantic Ocean"  # off the Rockaways
+    assert water_phrase(None, 40.55, -74.0) == "the water"  # Lower New York Bay, unnamed

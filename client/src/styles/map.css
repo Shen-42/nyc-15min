@@ -123,7 +123,7 @@
    the map; only its buttons and menu catch them. */
 .map-toolbar {
   position: absolute;
-  top: var(--space-3);
+  top: calc(var(--credit-height) + var(--space-2)); /* below the map credit */
   left: var(--space-3);
   right: var(--space-3);
   z-index: 1000; /* above the tiles and shapes, below the panel (1100) */
@@ -139,15 +139,42 @@
 }
 
 /* Leaflet's zoom buttons go under the toolbar. --toolbar-space is measured
-   in MapView.jsx. The map credit in the top right stays put on wider
-   screens, where the toolbar doesn't reach it. */
+   in MapView.jsx. The map credit stays in the top right corner, above it. */
 .map-wrap .leaflet-top.leaflet-left {
   top: var(--toolbar-space, 0px);
 }
 
+/* Leaflet's credit box sits on one short line in the very top right
+   corner, and the toolbar starts just below it. */
+.map-wrap {
+  --credit-height: 18px;
+}
+
+.map-wrap .leaflet-control-attribution {
+  height: var(--credit-height);
+  font-size: 11px;
+  line-height: var(--credit-height);
+  white-space: nowrap;
+}
+
+/* Phones: the three views fill the first row and "Go to…" is on the
+   second. No zoom buttons: phones pinch to zoom. */
 @media (max-width: 767px) {
-  .map-wrap .leaflet-top.leaflet-right {
-    top: var(--toolbar-space, 0px);
+  .map-toolbar .segmented {
+    flex: 1 1 100%;
+  }
+
+  .map-toolbar .segmented__button {
+    flex: 1;
+    padding: 0 var(--space-2);
+  }
+
+  .map-wrap .leaflet-control-attribution {
+    font-size: 10px;
+  }
+
+  .map-wrap .leaflet-control-zoom {
+    display: none;
   }
 }
 

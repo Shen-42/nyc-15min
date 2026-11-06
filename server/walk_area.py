@@ -163,9 +163,25 @@ def load_parks(path):
 
 
 def load_water(path):
-    """Lakes and ponds in the city as a list of (name or None, shape in (lng, lat))."""
+    """Lakes and ponds in the city as a list of (name or None, shape in (lng, lat)).
+    Also reads data/waterways.json, the named rivers and bays, which has the same format."""
     items = json.loads(Path(path).read_text())
     return [(w["name"], shapely.make_valid(shape(w["geometry"]))) for w in items]
+
+
+# Names that read with "the" in front: "the Hudson River", "the Arthur
+# Kill", but "Jamaica Bay", "Newtown Creek", "Long Island Sound".
+THE_ENDINGS = ("River", "Canal", "Kill", "Ocean", "Channel")
+
+
+def water_phrase(name, lat, lng):
+    """How to name the water a click landed in: "the East River", "Jamaica
+    Bay". With no name, open water south of Coney Island and the Rockaways
+    is the Atlantic (east of the line from Sandy Hook to Rockaway Point,
+    where Lower New York Bay ends); anywhere else, "the water"."""
+    if not name:
+        return "the Atlantic Ocean" if lat < 40.585 and lng > -73.94 else "the water"
+    return f"the {name}" if name.split()[-1] in THE_ENDINGS else name
 
 
 def walking_area(graph, start, times, max_minutes, speed_m_per_min, land=None, cell_m=CELL_M):

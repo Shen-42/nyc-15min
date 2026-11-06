@@ -148,7 +148,8 @@ export default function CityMap({
       maxBoundsViscosity={1.0}
       attributionControl={false}
     >
-      {/* Top right, so the results sheet on phones doesn't cover the credit. */}
+      {/* Leaflet's credit box, in the top right corner above the toolbar
+          (map.css), so the sheet on phones never covers it. */}
       <AttributionControl position="topright" />
       {/* Stadia Maps "OSM Bright": green parks, blue water, colored roads.
           Free for non-commercial use (200,000 tiles a month). See TILE_URL. */}

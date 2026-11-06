@@ -34,10 +34,13 @@ from rate_limit import RateLimited, RateLimiter, make_counter
 from scoring import parse_weights, score_walk, settings_with_weights
 from shared_cache import make_shared_cache
 from usage import make_usage
-from walk_area import Outlines, empty_islands, load_boroughs, load_not_lived_on, load_parks, load_water, walking_area
+from walk_area import Outlines, empty_islands, water_phrase, load_boroughs, load_not_lived_on, load_parks, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.npz"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
+# Named rivers, bays, and straits, to say which one a click landed in
+# (build_water.py). Without it, clicks in them are still turned away.
+WATERWAYS_FILE = Path(__file__).parent / "data" / "waterways.json"
 AMENITIES_FILE = Path(__file__).parent / "data" / "amenities.json"
 RAMPS_FILE = Path(__file__).parent / "data" / "ramps.json"
 DATA_DIR = Path(__file__).parent / "data"
@@ -53,6 +56,8 @@ walk_graph = None
 boroughs = Outlines([])
 # Islands where nobody lives, such as Rikers and Randall's (card 15).
 islands = Outlines([])
+# The rivers and bays by name (card 15).
+waterways = Outlines([])
 # Islands with almost no paths, found from the graph when it loads.
 empty_land = Outlines([])
 # The five boroughs' shoreline minus lakes and ponds, for trimming walking areas.
@@ -93,7 +98,7 @@ def peak_memory_mb():
 
 @asynccontextmanager
 async def lifespan(app):
-    global walk_graph, boroughs, islands, empty_land, land, water, parks, amenities, places_index, amenity_by_id, ramp_penalty, grid, shared_cache
+    global walk_graph, boroughs, islands, empty_land, waterways, land, water, parks, amenities, places_index, amenity_by_id, ramp_penalty, grid, shared_cache
     if AMENITIES_FILE.exists():
         amenities = load_amenities(AMENITIES_FILE)
         places_index = PlaceIndex(amenities)
@@ -109,6 +114,9 @@ async def lifespan(app):
         print(f"Loaded {len(water)} lakes and ponds")
     else:
         print(f"No water file at {WATER_FILE}. Run: python scripts/build_water.py")
+    if WATERWAYS_FILE.exists():
+        waterways = Outlines(load_water(WATERWAYS_FILE))
+        print(f"Loaded {len(waterways)} rivers and bays")
     if PARKS_FILE.exists():
         parks = Outlines(load_parks(PARKS_FILE))
         print(f"Loaded {len(parks)} parks")
@@ -336,13 +344,19 @@ def plan_walk(request, kind, lat, lng, minutes, timer, mode="walk"):
     clicked = Point(lng, lat)  # shapely uses (x, y) = (lng, lat)
     on_island, name = islands.find(clicked)
     if on_island:
-        raise HTTPException(status_code=422, detail=f"Nobody lives on {name}. Pick a spot where people live.")
+        raise HTTPException(status_code=422, detail=f"{name} has no residential areas. Pick a spot where people live.")
     on_empty_island, _ = empty_land.find(clicked)
     if on_empty_island:
-        raise HTTPException(status_code=422, detail="Nobody lives on this island. Pick a spot where people live.")
+        raise HTTPException(status_code=422, detail="This island has no residential areas. Pick a spot where people live.")
     in_water, name = water.find(clicked)
     if in_water:
         raise HTTPException(status_code=422, detail=f"That's in {name or 'the water'}. Pick a spot on land.")
+    # Rivers, bays, and the ocean: off the shoreline but inside the city's
+    # limits, which run through the water. The site sends these clicks so
+    # the server can name the water.
+    if len(boroughs) and not boroughs.find(clicked)[0]:
+        _, name = waterways.find(clicked)
+        raise HTTPException(status_code=422, detail=f"That's in {water_phrase(name, lat, lng)}. Pick a spot on land.")
     in_park, name = parks.find(clicked)
     if in_park:
         raise HTTPException(

@@ -52,6 +52,12 @@ def test_places_and_area_endpoints():
 
         water = c.get("/api/places", params={"lat": 40.7855, "lng": -73.9628})  # the Reservoir
         assert water.status_code == 422
+
+        # Card 15: rivers and the ocean are named, or at least called water.
+        river = c.get("/api/places", params={"lat": 40.706, "lng": -73.996})  # under the Brooklyn Bridge
+        assert river.status_code == 422
+        assert river.json()["detail"].startswith("That's in the ")
+        assert river.json()["detail"].endswith("Pick a spot on land.")
     rate_limiter.counter.clear()
 
 
@@ -268,12 +274,12 @@ def test_clicks_on_islands_where_nobody_lives_are_turned_away():
         for lat, lng in [(40.7934, -73.8845), (40.7890, -73.9205), (40.8008, -73.8990)]:
             res = c.get("/api/places", params={"lat": lat, "lng": lng})
             assert res.status_code == 422
-            assert res.json()["detail"].startswith("Nobody lives on")
+            assert res.json()["detail"].endswith("has no residential areas. Pick a spot where people live.")
         # Islands with no streets: a Jamaica Bay marsh, Hoffman Island, Mill Rock.
         for lat, lng in [(40.62417, -73.85296), (40.57883, -74.05367), (40.78063, -73.93785)]:
             res = c.get("/api/places", params={"lat": lat, "lng": lng})
             assert res.status_code == 422
-            assert res.json()["detail"].startswith("Nobody lives on this island")
+            assert res.json()["detail"].startswith("This island has no residential areas")
         roosevelt = c.get("/api/places", params={"lat": 40.7620, "lng": -73.9497})  # people live here
         assert roosevelt.status_code == 200
     rate_limiter.counter.clear()
