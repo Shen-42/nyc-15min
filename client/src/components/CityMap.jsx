@@ -6,12 +6,21 @@ import {
   MapContainer,
   Marker,
   Polygon,
-  TileLayer,
   Tooltip,
   useMap,
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
+// MapLibre draws the base map from vector tiles (card 15), and the plugin
+// puts it inside Leaflet as one more layer, under the walk area and markers.
+import { setWorkerUrl } from "maplibre-gl";
+import { maplibreGL } from "@maplibre/maplibre-gl-leaflet";
+import "maplibre-gl/dist/maplibre-gl.css";
+// MapLibre parses tiles in a web worker, which it looks for next to its own
+// file. Vite bundles that file elsewhere, so give it the worker's address.
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
+
+setWorkerUrl(maplibreWorkerUrl);
 import { CITY_BOUNDS, CITY_CENTER, CITY_OUTLINE, OUTER_RING } from "../data/city";
 import BarrierMarkers from "./BarrierMarkers";
 import GridLayer from "./GridLayer";
@@ -20,15 +29,39 @@ import { cellScore, heatColor, hexToRgb, inPark, isGap } from "../data/grid";
 import { smoothstep } from "../data/gridImage";
 import PlaceMarkers from "./PlaceMarkers";
 
-// Base map tiles. On the live site, Stadia allows requests by checking the
-// site's domain (registered in the Stadia dashboard), so no key is needed.
-// On localhost, requests without a key are heavily rate-limited, so a free
-// key in client/.env.local (VITE_STADIA_API_KEY=...) is added when present.
+// The base map: Stadia Maps' "OSM Bright" style (green parks, blue water,
+// colored roads) as vector tiles. Stadia sends the streets, parks, and labels
+// as shapes and the browser draws them, so zooming redraws the map at once
+// instead of waiting for new pictures of every level. One download also
+// serves several zoom levels. Free for non-commercial use.
+//
+// On the live site, Stadia allows requests by checking the site's domain
+// (registered in the Stadia dashboard), so no key is needed. On localhost,
+// requests without a key are heavily rate-limited, so a free key in
+// client/.env.local (VITE_STADIA_API_KEY=...) is added when present.
 // .env.local is not committed, so the key stays off GitHub.
 const STADIA_KEY = import.meta.env.VITE_STADIA_API_KEY;
-const TILE_URL =
-  "https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png" +
-  (STADIA_KEY ? `?api_key=${STADIA_KEY}` : "");
+const STYLE_URL =
+  "https://tiles.stadiamaps.com/styles/osm_bright.json" + (STADIA_KEY ? `?api_key=${STADIA_KEY}` : "");
+const MAP_CREDIT =
+  '&copy; <a href="https://stadiamaps.com/attribution/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>';
+
+// Adds the vector base map to the Leaflet map, and removes it on unmount.
+// Leaflet still handles dragging and zooming; MapLibre only draws.
+function VectorBaseMap() {
+  const map = useMap();
+  useEffect(() => {
+    const layer = maplibreGL({
+      style: STYLE_URL,
+      // The plugin turns MapLibre's own credit box off and hands this text
+      // to Leaflet's, so the credit stays in one place.
+      attributionControl: { customAttribution: MAP_CREDIT },
+      interactive: false,
+    }).addTo(map);
+    return () => layer.remove();
+  }, [map]);
+  return null;
+}
 
 // The gap finder's best spot: a star, a shape no other marker uses.
 const STAR_ICON = L.divIcon({
@@ -151,19 +184,7 @@ export default function CityMap({
       {/* Leaflet's credit box, in the top right corner above the toolbar
           (map.css), so the sheet on phones never covers it. */}
       <AttributionControl position="topright" />
-      {/* Stadia Maps "OSM Bright": green parks, blue water, colored roads.
-          Free for non-commercial use (200,000 tiles a month). See TILE_URL. */}
-      <TileLayer
-        attribution='&copy; <a href="https://stadiamaps.com/attribution/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'
-        url={TILE_URL}
-        maxZoom={18}
-        // Only fetch tiles once a zoom finishes, not for every level passed
-        // through on the way. Fewer requests, and fewer refused ones.
-        updateWhenZooming={false}
-        // Keep an extra ring of tiles around the view so short pans don't
-        // show blank squares.
-        keepBuffer={4}
-      />
+      <VectorBaseMap />
 
       {/* className must be a direct prop: react-leaflet applies pathOptions
           after the shape is created, and Leaflet ignores className then. */}

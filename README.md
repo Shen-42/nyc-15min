@@ -67,7 +67,7 @@ Open http://localhost:5173. For the map key, accounts, tests, and deploying, see
 
 ## Built with
 
-React, Vite, and Leaflet on the front; Python, FastAPI, NumPy, scipy, and Shapely behind it; Supabase for accounts; hosted on Render.
+React, Vite, Leaflet, and MapLibre on the front; Python, FastAPI, NumPy, scipy, and Shapely behind it; Supabase for accounts; hosted on Render.
 
 ## Data and credits
 

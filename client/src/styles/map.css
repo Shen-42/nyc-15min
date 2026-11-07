@@ -207,3 +207,9 @@
 }
 
 /* .map-select ("Go to…") shares its look with the panel's menus: panel.css. */
+
+/* Before any tile has loaded, the map shows this instead of Leaflet's grey:
+   the land color of the OSM Bright tiles, so a gap reads as blank land. */
+.map-wrap .leaflet-container {
+  background: #f8f4f0;
+}

@@ -9,9 +9,9 @@
 // spills into the rivers, and any "blank" outlines (lakes, and for the gap
 // finder, parks) are cut out of it.
 //
-// Only the part of the city in view is drawn (card 15): the whole city at
-// full detail would be a canvas of tens of millions of pixels. Zoomed out,
-// each grid square gets fewer pixels, which can't be told apart at that zoom.
+// Only the part of the city around the view is drawn (card 15): the whole
+// city at full detail would be a canvas of tens of millions of pixels. Zoomed
+// out, each grid square gets fewer pixels, which can't be told apart at that zoom.
 //
 // With fill on (the score map), cells with no value, the parks, are colored
 // from the blocks around them: where the normal smoothing has no data, a much
@@ -83,7 +83,25 @@ function sample(field, cols, rows, gx, gy) {
   return top * (1 - ty) + bottom * ty;
 }
 
-// Returns { url, bounds } for L.imageOverlay, or null if no squares are in view.
+// The first and last column and row with any squares, worked out once per
+// set of cells (a new set comes when a borough's grid loads).
+const edgeCache = new WeakMap();
+function gridEdges(cells) {
+  let edges = edgeCache.get(cells);
+  if (!edges) {
+    edges = { c0: Infinity, c1: -Infinity, r0: Infinity, r1: -Infinity };
+    for (const cell of cells) {
+      if (cell[4] < edges.c0) edges.c0 = cell[4];
+      if (cell[4] > edges.c1) edges.c1 = cell[4];
+      if (cell[5] < edges.r0) edges.r0 = cell[5];
+      if (cell[5] > edges.r1) edges.r1 = cell[5];
+    }
+    edgeCache.set(cells, edges);
+  }
+  return edges;
+}
+
+// Returns { canvas, bounds } for the map (GridLayer.jsx), or null if no squares are in view.
 //   cells: [lat, lng, scores, flags, col, row] (see grid.js); meta: the grid's meta.
 //   view: { south, west, north, east }, the part of the map to draw.
 //   valueFor(cell): a number, or null for "no data here" (parks).
@@ -99,10 +117,14 @@ export function gridImage({ cells, meta, view, valueFor, colorFor, sigma, land, 
   const kernel = gaussianKernel(sigma);
   const wide = gaussianKernel(FILL_SIGMA);
   const pad = (fill ? wide : kernel).radius + 1;
-  const c0 = Math.floor((view.west - originLng) / stepLng) - pad;
-  const c1 = Math.ceil((view.east - originLng) / stepLng) + pad;
-  const r0 = Math.floor((view.south - originLat) / stepLat) - pad;
-  const r1 = Math.ceil((view.north - originLat) / stepLat) + pad;
+  // Never past the grid's own edges: zoomed out, the area asked for runs far
+  // into New Jersey and the ocean, which would only make empty work.
+  const edges = gridEdges(cells);
+  const c0 = Math.max(edges.c0, Math.floor((view.west - originLng) / stepLng)) - pad;
+  const c1 = Math.min(edges.c1, Math.ceil((view.east - originLng) / stepLng)) + pad;
+  const r0 = Math.max(edges.r0, Math.floor((view.south - originLat) / stepLat)) - pad;
+  const r1 = Math.min(edges.r1, Math.ceil((view.north - originLat) / stepLat)) + pad;
+  if (c1 < c0 || r1 < r0) return null;
   const cols = c1 - c0 + 1;
   const rows = r1 - r0 + 1;
   const inView = cells.filter((cell) => cell[4] >= c0 && cell[4] <= c1 && cell[5] >= r0 && cell[5] <= r1);
@@ -220,8 +242,10 @@ export function gridImage({ cells, meta, view, valueFor, colorFor, sigma, land, 
     clipCtx.fill("nonzero");
   }
 
+  // The canvas itself, not a PNG of it: encoding and decoding a PNG of up
+  // to 2.5 million pixels took longer than drawing it.
   return {
-    url: clipped.toDataURL(),
+    canvas: clipped,
     bounds: [
       [south, west],
       [north, east],

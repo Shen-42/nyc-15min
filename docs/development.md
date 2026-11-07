@@ -6,10 +6,10 @@ How to run, test, rebuild, and deploy the project.
 
 | Part | Tools |
 | --- | --- |
-| Front end | React 19, Vite, Leaflet with react-leaflet, Atkinson Hyperlegible font |
+| Front end | React 19, Vite, Leaflet with react-leaflet, MapLibre GL (base map) through @maplibre/maplibre-gl-leaflet, Atkinson Hyperlegible font |
 | Back end | Python, FastAPI, NumPy and scipy (the graph and its search), Shapely, opening-hours-py |
 | Data | OpenStreetMap via OSMnx and the Overpass API; NYC Open Data for curb ramps |
-| Map tiles | Stadia Maps, OSM Bright style |
+| Map tiles | Stadia Maps, OSM Bright style, as vector tiles |
 | Accounts | Supabase Auth (email and password) and Postgres, through the API |
 | Hosting | Render: a static site, a web service for the API, and Key Value (Redis) for rate limits, usage counts, and saved walking areas |
 | Automation | GitHub Actions: tests on every push and pull request, Dependabot updates, monthly data refresh, Supabase keep-alive |
