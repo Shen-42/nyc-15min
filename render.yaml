@@ -19,7 +19,7 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.14.8
-      # The site's address, e.g. https://nyc-15min.onrender.com
+      # The site's addresses, comma-separated: https://www.nyc15min.com,https://nyc15min.com,https://nyc-15min.onrender.com
       - key: ALLOWED_ORIGINS
         sync: false
       # Where the rate limit keeps its counts (see server/rate_limit.py).

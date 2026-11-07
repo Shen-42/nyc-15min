@@ -2,11 +2,11 @@
 
 [![Tests](https://github.com/Shen-42/nyc-15min/actions/workflows/tests.yml/badge.svg)](https://github.com/Shen-42/nyc-15min/actions/workflows/tests.yml)
 [![Refresh map data](https://github.com/Shen-42/nyc-15min/actions/workflows/refresh-data.yml/badge.svg)](https://github.com/Shen-42/nyc-15min/actions/workflows/refresh-data.yml)
-[![Live site](https://img.shields.io/badge/live-nyc--15min.onrender.com-2ea44f)](https://nyc-15min.onrender.com)
+[![Live site](https://img.shields.io/badge/live-nyc15min.com-2ea44f)](https://www.nyc15min.com)
 
 **Could you get through your week in New York on foot?** Click any spot in the five boroughs and see everywhere you can walk in 15 minutes, the groceries, pharmacies, doctors, parks, schools, and subway stations inside that walk, and a 0–100 score for how much of daily life is close by.
 
-**[Try it here](https://nyc-15min.onrender.com)**. No sign-up needed.
+**[Try it here](https://www.nyc15min.com)**. No sign-up needed.
 
 > The API runs on a free plan and sleeps when nobody's using it, so the first search can take up to a minute. After that it answers in milliseconds.
 
@@ -55,7 +55,7 @@ Open http://localhost:5173. For the map key, accounts, tests, and deploying, see
 
 | | |
 | --- | --- |
-| Live site | https://nyc-15min.onrender.com |
+| Live site | https://www.nyc15min.com |
 | API health check | https://nyc-15min-api.onrender.com/api/health |
 | How it works | [docs/how-it-works.md](docs/how-it-works.md) |
 | Development (setup, tests, data, deploy) | [docs/development.md](docs/development.md) |

@@ -178,15 +178,15 @@ The site tests (Vitest, with jsdom standing in for the browser) cover the 70-sec
 
 `render.yaml` defines three services, created together in the Render dashboard under **New > Blueprint**:
 
-- **nyc-15min-api**: the FastAPI server. 512 MB of memory and 0.1 CPU. Its build downloads the map data release named in `server/data-release.json`. It sleeps after 15 minutes without visits; the site shows "Starting up. This can take up to a minute…" while it starts again.
-- **nyc-15min**: the built React site, served as static files. Always on.
+- **nyc-15min-api**: the FastAPI server. 512 MB of memory and 0.1 CPU. Its build downloads the map data release named in `server/data-release.json`. It sleeps after 15 minutes without visits; the site shows "Starting up. This can take up to a minute…" while it starts again. A free cron-job.org job loads `/api/health` every 10 minutes from 7 am to 1 am New York time, so it stays awake while the city is up and sleeps overnight. That uses about 560 of Render's 750 free instance hours a month.
+- **nyc-15min**: the built React site, served as static files. Always on. Its address is https://www.nyc15min.com; https://nyc15min.com redirects there, and https://nyc-15min.onrender.com still works.
 - **nyc-15min-limits**: a free Key Value (Redis-compatible) instance for rate-limit counts and saved walking areas, reachable only from the API. When its 25 MB fill up, it drops the least recently used keys.
 
 Set these in each service's **Environment** page:
 
 | Service | Variable | Value |
 | --- | --- | --- |
-| nyc-15min-api | `ALLOWED_ORIGINS` | The site's address, e.g. `https://nyc-15min.onrender.com` |
+| nyc-15min-api | `ALLOWED_ORIGINS` | Every address the site is served from, comma-separated: `https://www.nyc15min.com,https://nyc15min.com,https://nyc-15min.onrender.com` |
 | nyc-15min-api | `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | From Supabase's **Project Settings > API Keys** (accounts) |
 | nyc-15min-api | `ADMIN_USER_IDS` | Comma-separated Supabase user ids |
 | nyc-15min-api | `GH_REFRESH_TOKEN` | A fine-grained GitHub token with Actions read and write on this repo |
@@ -196,5 +196,16 @@ Set these in each service's **Environment** page:
 Vite builds `VITE_API_URL` into the site, so changing it needs a new deploy of the site. When a change touches both the API and the site, wait for the API to finish deploying before testing, since the site finishes first.
 
 On the live site, Stadia Maps allows tiles by checking the site's domain, which you register under **Authentication Configuration** in the Stadia dashboard. No key is shipped to the browser.
+
+### The domain
+
+nyc15min.com is registered with Cloudflare, which also runs its DNS. Two CNAME records point it at the site, both set to **DNS only** (grey cloud), so Render can verify the domain and issue its HTTPS certificate:
+
+| Name | Target |
+| --- | --- |
+| `www` | `nyc-15min.onrender.com` |
+| `@` | `nyc-15min.onrender.com` (Cloudflare flattens this to an address) |
+
+Adding another address for the site takes four places: Render (the site's **Custom Domains**), the API's `ALLOWED_ORIGINS`, Stadia's **Authentication Configuration**, and Supabase's **Redirect URLs**. Missing the API gives "Can't connect"; missing Stadia gives "401 Invalid Authentication" map tiles.
 
 [Back to the README](../README.md)

@@ -13,7 +13,7 @@ import time
 import urllib.request
 
 API = "https://nyc-15min-api.onrender.com"
-SITE = "https://nyc-15min.onrender.com"
+SITE = "https://www.nyc15min.com"
 # One spot per borough: Times Square, Crown Heights, Flushing, Parkchester, New Springville.
 SPOTS = {
     "Manhattan": (40.7580, -73.9855),
