@@ -149,7 +149,7 @@ async def lifespan(app):
         empty_land = Outlines(empty_islands(walk_graph.lat, walk_graph.lng))
         print(f"Found {len(empty_land)} islands with no streets")
         version = f"{AREA_FORMAT}-{walk_graph.meta.get('built')}-{len(walk_graph)}"
-        shared_cache = make_shared_cache(version)
+        shared_cache = make_shared_cache(redis_client, version)
     else:
         print(f"No walking graph at {GRAPH_FILE}. Run: python scripts/build_graph.py")
     accounts.setup(usage, check_rate_limit)
@@ -331,9 +331,24 @@ def nearest_street(
 # the API gets a 429 instead of using up the server and Render's free
 # bandwidth. See rate_limit.py for where the counts are kept.
 SEARCHES_PER_MINUTE = 30
-rate_limiter = RateLimiter(SEARCHES_PER_MINUTE, make_counter())
+
+
+def connect_redis():
+    """A Redis client if REDIS_URL is set (on Render: the free Key Value
+    instance in render.yaml), otherwise None (local development, tests).
+    Shared by the rate limit, the usage counts, and the area cache."""
+    url = os.environ.get("REDIS_URL")
+    if not url:
+        return None
+    import redis
+
+    return redis.from_url(url, socket_timeout=0.5, socket_connect_timeout=0.5)
+
+
+redis_client = connect_redis()
+rate_limiter = RateLimiter(SEARCHES_PER_MINUTE, make_counter(redis_client))
 # Requests per route per day, for the admin page (card 13).
-usage = make_usage()
+usage = make_usage(redis_client)
 
 
 def client_ip(request):

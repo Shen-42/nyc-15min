@@ -5,7 +5,6 @@ In memory when Redis isn't set up. Like the rate limit, a broken counter
 never fails a request.
 """
 
-import os
 from collections import defaultdict
 from datetime import date, timedelta
 
@@ -62,10 +61,6 @@ class Usage:
         return out
 
 
-def make_usage():
-    url = os.environ.get("REDIS_URL")
-    if not url:
-        return Usage(MemoryUsage())
-    import redis
-
-    return Usage(RedisUsage(redis.from_url(url, socket_timeout=0.5, socket_connect_timeout=0.5)))
+def make_usage(client):
+    """client: a Redis client, or None to count in memory."""
+    return Usage(MemoryUsage() if client is None else RedisUsage(client))

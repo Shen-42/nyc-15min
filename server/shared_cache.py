@@ -19,7 +19,6 @@ shouldn't slow down or break searches.
 
 import gzip
 import json
-import os
 import time
 
 EXPIRE_DAYS = 30
@@ -67,13 +66,9 @@ class SharedCache:
             print(f"Shared area cache unavailable, drawing areas again: {err}")
 
 
-def make_shared_cache(version):
-    """A SharedCache if REDIS_URL is set, otherwise None (local development, tests)."""
-    url = os.environ.get("REDIS_URL")
-    if not url:
+def make_shared_cache(client, version):
+    """A SharedCache given a Redis client, otherwise None (local development, tests)."""
+    if client is None:
         return None
-    import redis
-
-    client = redis.from_url(url, socket_timeout=0.5, socket_connect_timeout=0.5)
     print("Walking areas are also cached in Redis")
     return SharedCache(client, version)

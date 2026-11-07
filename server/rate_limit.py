@@ -16,7 +16,6 @@ broken counter shouldn't take the whole site down.
 """
 
 import math
-import os
 import time
 
 WINDOW_SECONDS = 60
@@ -79,12 +78,9 @@ class RateLimiter:
             raise RateLimited(max(1, math.ceil(seconds_left)))
 
 
-def make_counter():
-    url = os.environ.get("REDIS_URL")
-    if not url:
+def make_counter(client):
+    """client: a Redis client, or None to count in memory."""
+    if client is None:
         return MemoryCounter()
-    import redis
-
-    client = redis.from_url(url, socket_timeout=0.5, socket_connect_timeout=0.5)
     print("Rate limit counts are stored in Redis")
     return RedisCounter(client)
