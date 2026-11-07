@@ -20,6 +20,7 @@ download, of the land, doesn't reach.
 
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 import osmnx as ox
@@ -47,6 +48,12 @@ WATERWAY_TAGS = {"natural": ["water", "bay", "strait"], "waterway": ["river", "c
 WATER_TYPES = {"river", "canal", "tidal_channel"}  # water=* on an area
 LINE_TYPES = {"river", "canal", "tidal_channel"}  # waterway=* on a line
 BAY_TYPES = ["bay", "strait"]  # natural=* on an area or a point
+# River center lines are kept this far outside the city's limits too: the
+# limits run down the middle of the Hudson, right along its center line, so
+# cutting the line to them strictly left almost none of it.
+LINE_MARGIN_DEGREES = 0.01
+# Names misspelled in OpenStreetMap (fix them there too, when you can).
+NAME_FIXES = {"Big Channelv": "Big Channel"}
 
 # Ignore fountains and small decorative pools.
 MIN_AREA_M2 = 500
@@ -88,31 +95,40 @@ def main():
 
     print("\nDownloading the names of the rivers and bays...")
     named = overpass.download("rivers and bays", lambda: ox.features_from_polygon(city.simplify(0.001), tags=WATERWAY_TAGS))
+    # Something on the line between two download pieces comes back from both.
+    named = named[~named.index.duplicated()]
+    near_city = city.buffer(LINE_MARGIN_DEGREES)
     waterways = []
     for _, row in named.iterrows():
         name = text(row.get("name"))
         geom = row.geometry
         if not name or geom is None:
             continue
-        kind = geom.geom_type
-        if kind in ("Polygon", "MultiPolygon"):
+        name = NAME_FIXES.get(name, name)
+        if text(row.get("tunnel")) not in (None, "no"):
+            continue  # a tunnel under the water, like the Gowanus flushing tunnel
+        # kind tells the server how to use it (walk_area.NearestName): an
+        # area to be inside, a river or channel line, or a bay's label point.
+        shape_type = geom.geom_type
+        if shape_type in ("Polygon", "MultiPolygon"):
             keep = has_tag(row, "natural", BAY_TYPES) or text(row.get("water")) in WATER_TYPES
-        elif kind in ("LineString", "MultiLineString"):
-            keep = text(row.get("waterway")) in LINE_TYPES
+            kind, clipped = "area", polygons_only(geom.intersection(city))
+        elif shape_type in ("LineString", "MultiLineString"):
+            waterway = text(row.get("waterway"))
+            keep = waterway in LINE_TYPES
+            kind, clipped = ("river" if waterway == "river" else "channel"), geom.intersection(near_city)
         else:  # a point
             keep = has_tag(row, "natural", BAY_TYPES)
-        if not keep:
-            continue  # a lake, a stream, or an unnamed bit
-        clipped = geom.intersection(city)
-        if kind in ("Polygon", "MultiPolygon"):
-            clipped = polygons_only(clipped)
-        if clipped.is_empty:
-            continue
-        waterways.append({"name": name, "geometry": mapping(clipped.simplify(0.0001))})  # about 10 m
+            kind, clipped = "label", geom.intersection(city)
+        if not keep or clipped.is_empty:
+            continue  # a lake, a stream, or outside the city
+        waterways.append({"name": name, "kind": kind, "geometry": mapping(clipped.simplify(0.0001))})  # about 10 m
 
     WATERWAYS_FILE.write_text(json.dumps(waterways, separators=(",", ":")))
     size_kb = WATERWAYS_FILE.stat().st_size / 1000
-    print(f"\nSaved {len(waterways)} rivers, bays, and straits to {WATERWAYS_FILE} ({size_kb:.0f} KB)")
+    kinds = Counter(w["kind"] for w in waterways)
+    print(f"\nSaved {len(waterways)} rivers, bays, and straits to {WATERWAYS_FILE} ({size_kb:.0f} KB): "
+          + ", ".join(f"{n} {k}" for k, n in kinds.items()))
     print("Named:", ", ".join(sorted({w["name"] for w in waterways})))
 
 

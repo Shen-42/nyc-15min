@@ -172,18 +172,32 @@ THE_ENDINGS = ("River", "Canal", "Kill", "Ocean", "Channel")
 
 
 class NearestName:
-    """The named water nearest a click, from lines and points: the center
-    lines of the big rivers and the label points of bays, which have no
-    outline to be inside (card 15). A line counts within LINE_DEGREES (about
-    1.3 km, more than half the Hudson's width), a label point within
-    POINT_DEGREES (about 4 km, across most of Jamaica Bay)."""
+    """The named water nearest a click, for water with no outline to be
+    inside (card 15): the big rivers have only a center line, the bays only a
+    label point. Kinds are tried in order, each within its own reach, and the
+    nearest of the first kind with any in reach wins:
 
-    LINE_DEGREES = 0.015
-    POINT_DEGREES = 0.05
+      river    a river's center line, within RIVER_DEGREES (about 1.3 km,
+               more than half the Hudson's width)
+      label    a bay's label point, within LABEL_DEGREES (about 4 km, across
+               most of Jamaica Bay)
+      channel  a canal or tidal channel's line, within CHANNEL_DEGREES (about
+               500 m)
+
+    So a click in Jamaica Bay is "Jamaica Bay", not the marsh channel it
+    happens to be nearest, while a click in a canal off the bays still gets
+    the canal's name."""
+
+    REACH = {"river": 0.015, "label": 0.05, "channel": 0.006}
 
     def __init__(self, items):
-        self.names = [name for name, _ in items]
-        self.shapes = [shape for _, shape in items]
+        """items: (name, shape, kind). A kind of None is worked out from the
+        shape, for files made before kinds were saved."""
+        self.names, self.shapes, self.kinds = [], [], []
+        for name, shape, kind in items:
+            self.names.append(name)
+            self.shapes.append(shape)
+            self.kinds.append(kind or ("label" if shape.geom_type in ("Point", "MultiPoint") else "river"))
         self.tree = STRtree(self.shapes)
 
     def __len__(self):
@@ -191,14 +205,28 @@ class NearestName:
 
     def find(self, point):
         """The nearest name in reach, or None."""
-        best, best_distance = None, math.inf
-        for i in self.tree.query(point, predicate="dwithin", distance=self.POINT_DEGREES):
-            shape = self.shapes[i]
-            reach = self.POINT_DEGREES if shape.geom_type in ("Point", "MultiPoint") else self.LINE_DEGREES
-            distance = shape.distance(point)
-            if distance <= reach and distance < best_distance:
-                best, best_distance = self.names[i], distance
-        return best
+        best = {}  # kind -> (distance, name)
+        for i in self.tree.query(point, predicate="dwithin", distance=max(self.REACH.values())):
+            kind = self.kinds[i]
+            distance = self.shapes[i].distance(point)
+            if distance <= self.REACH[kind] and distance < best.get(kind, (math.inf, None))[0]:
+                best[kind] = (distance, self.names[i])
+        for kind in ("river", "label", "channel"):
+            if kind in best:
+                return best[kind][1]
+        return None
+
+
+def load_waterways(path):
+    """data/waterways.json as (name, shape, kind); see NearestName for kinds."""
+    items = json.loads(Path(path).read_text())
+    return [(w["name"], shapely.make_valid(shape(w["geometry"])), w.get("kind")) for w in items]
+
+
+def in_open_ocean(lat, lng):
+    """South of Coney Island and the Rockaways, east of the line from Sandy
+    Hook to Rockaway Point where Lower New York Bay ends: the Atlantic."""
+    return lat < 40.585 and lng > -73.94
 
 
 def water_phrase(name, lat, lng):
@@ -207,7 +235,7 @@ def water_phrase(name, lat, lng):
     is the Atlantic (east of the line from Sandy Hook to Rockaway Point,
     where Lower New York Bay ends); anywhere else, "the water"."""
     if not name:
-        return "the Atlantic Ocean" if lat < 40.585 and lng > -73.94 else "the water"
+        return "the Atlantic Ocean" if in_open_ocean(lat, lng) else "the water"
     if name.startswith("The "):
         return "the " + name[4:]  # "The Narrows" mid-sentence
     words = name.split()

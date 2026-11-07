@@ -230,9 +230,10 @@ def test_nearest_name_finds_rivers_by_center_line_and_bays_by_label():
     from shapely.geometry import LineString
 
     names = NearestName([
-        ("Hudson River", LineString([(-74.02, 40.70), (-74.00, 40.80)])),
-        ("Jamaica Bay", Point(-73.83, 40.61)),
+        ("Hudson River", LineString([(-74.02, 40.70), (-74.00, 40.80)]), "river"),
+        ("Jamaica Bay", Point(-73.83, 40.61), "label"),
+        ("Black Wall Channel", LineString([(-73.87, 40.59), (-73.85, 40.61)]), "channel"),
     ])
     assert names.find(Point(-74.015, 40.75)) == "Hudson River"  # about 300 m off the line
-    assert names.find(Point(-73.86, 40.60)) == "Jamaica Bay"  # about 2.7 km from the label
+    assert names.find(Point(-73.86, 40.60)) == "Jamaica Bay"  # about 2.7 km from the label, nearer the channel
     assert names.find(Point(-73.95, 40.65)) is None  # inland Brooklyn, near neither
