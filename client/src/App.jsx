@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SLOW_REQUEST_MS, apiFetch } from "./api";
 import { fetchArea } from "./area";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -10,8 +10,8 @@ import { useAccountData } from "./account/useAccountData";
 import CityMap from "./components/CityMap";
 import MapView from "./components/MapView";
 import ResultsPanel from "./components/ResultsPanel";
-import { BOROUGHS, boroughAt, boxesOverlap, isInCityLimits } from "./data/city";
-import { combineGrids, loadBoroughGrid, loadGridIndex } from "./data/grid";
+import { BOROUGHS, boroughAt, isInCityLimits } from "./data/city";
+import { useGrid } from "./data/useGrid";
 import { loadMode, loadWeights, saveMode, saveWeights, weightsToQuery } from "./data/profiles";
 import { atQuery, formatHour, nycNow } from "./data/time";
 import { addRecent, describeSpot, loadRecent } from "./data/recent";
@@ -48,21 +48,13 @@ export default function App() {
   // What the map shows (card 12): "walk" (your walk), "heat" (score map), or "gaps".
   const [view, setView] = useState("walk");
   const [gapCategory, setGapCategory] = useState("grocery");
-  // The city grid (cards 12 and 15), one file per borough, loaded for the
-  // boroughs in view once the score map or gap finder opens. gridIndex says
-  // which file holds each borough; grids holds the loaded ones by slug.
-  const [gridIndex, setGridIndex] = useState(null);
-  const [grids, setGrids] = useState({});
-  const loadingGrids = useRef(new Set());
-  const [gridError, setGridError] = useState(null);
   // The part of the city in view ({ bounds, center }), and the borough at its
   // middle, which the score map and gap finder describe (card 15).
   const [mapView, setMapView] = useState(null);
   const [borough, setBorough] = useState("Manhattan");
+  const { grid, boroughGrid, gridError } = useGrid(view, mapView, borough);
   // Where the map should fit to when a borough is picked.
   const [fitTo, setFitTo] = useState(null);
-  // Bumped by "Try again" to load the grid again after a failure.
-  const [gridAttempt, setGridAttempt] = useState(0);
   // Accounts (card 13): who is signed in, their saved places, and which
   // dialog is open. authReason says why sign-in was asked for, or is null.
   const account = useAccount();
@@ -120,34 +112,6 @@ export default function App() {
     const timer = setTimeout(rescore, RESCORE_DELAY_MS);
     return () => clearTimeout(timer);
   }, [weights, hour]);
-
-  // Load the grid for each borough in view, when the score map or gap finder
-  // is on. Each file is 70 to 250 KB compressed, and is loaded once.
-  useEffect(() => {
-    if (view === "walk" || !mapView) return;
-    setGridError(null);
-    const fail = (err) => setGridError({ text: err instanceof TypeError ? failureText(err) : err.message });
-    if (!gridIndex) {
-      loadGridIndex().then(setGridIndex, fail);
-      return;
-    }
-    if (!Object.keys(gridIndex.files ?? {}).length) {
-      setGridError({ text: "This map isn't available yet." });
-      return;
-    }
-    for (const b of BOROUGHS) {
-      const path = gridIndex.files?.[b.slug];
-      if (!path || grids[b.slug] || loadingGrids.current.has(b.slug)) continue;
-      if (!boxesOverlap(b.allBounds, mapView.bounds)) continue;
-      loadingGrids.current.add(b.slug);
-      loadBoroughGrid(path)
-        .then((g) => setGrids((loaded) => ({ ...loaded, [b.slug]: g })), fail)
-        .finally(() => loadingGrids.current.delete(b.slug));
-    }
-  }, [view, mapView, gridIndex, grids, gridAttempt]);
-
-  const grid = useMemo(() => combineGrids(grids), [grids]);
-  const boroughGrid = grids[BOROUGHS.find((b) => b.name === borough)?.slug] ?? null;
 
   function handleMapMove(next) {
     setMapView(next);
@@ -452,7 +416,7 @@ export default function App() {
         grid={grid}
         borough={borough}
         boroughGrid={boroughGrid}
-        gridError={gridError && { ...gridError, retry: () => setGridAttempt((n) => n + 1) }}
+        gridError={gridError}
         gapCategory={gapCategory}
         onGapCategory={setGapCategory}
         selectedPoint={selectedPoint}
