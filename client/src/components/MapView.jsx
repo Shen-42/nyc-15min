@@ -14,13 +14,15 @@ export const VIEWS = [
 export default function MapView({ view, onChange, onPickBorough }) {
   const ref = useRef(null);
 
-  // Leaflet's zoom buttons sit in the map's top left corner. Move them
-  // below the toolbar, however many rows it wraps to.
+  // How far down the toolbar reaches, however many rows it wraps to, as
+  // --toolbar-space on the whole app: Leaflet's zoom buttons go below it,
+  // and on phones the results sheet stops short of it (layout.css).
   useLayoutEffect(() => {
     const toolbar = ref.current;
     const wrap = toolbar?.parentElement;
     if (!wrap) return;
-    const measure = () => wrap.style.setProperty("--toolbar-space", `${toolbar.offsetTop + toolbar.offsetHeight}px`);
+    const app = wrap.closest(".app") ?? wrap;
+    const measure = () => app.style.setProperty("--toolbar-space", `${toolbar.offsetTop + toolbar.offsetHeight}px`);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(toolbar);

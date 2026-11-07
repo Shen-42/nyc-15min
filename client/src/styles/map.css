@@ -213,3 +213,28 @@
 .map-wrap .leaflet-container {
   background: #f8f4f0;
 }
+
+/* Phones: smaller place markers, so a dense block doesn't turn into one
+   pile of circles. The marker's box keeps its size, since Leaflet anchors
+   it by the middle, and the glyph sits centered inside it. */
+@media (max-width: 767px) {
+  .place-marker {
+    display: grid;
+    place-items: center;
+  }
+
+  .place-marker .glyph {
+    width: 16px;
+    height: 16px;
+    font-size: 8px;
+    border-width: 1.5px;
+  }
+
+  .place-marker .hours-unknown {
+    top: -2px;
+    right: -3px;
+    width: 10px;
+    height: 10px;
+    font-size: 8px;
+  }
+}

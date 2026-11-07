@@ -26,7 +26,10 @@
   right: 0;
   bottom: 0;
   z-index: 1100; /* above Leaflet's panes and controls */
-  height: 85dvh;
+  /* 85% of the screen, but never over the map's buttons: on a short
+     phone, or when the buttons wrap to two rows, it stops 8 px below
+     them. --toolbar-space is measured in MapView.jsx. */
+  height: min(85dvh, calc(100dvh - var(--toolbar-space, 0px) - var(--space-2)));
   overflow-y: auto;
   padding: 0 var(--space-4) var(--space-4);
   background: var(--color-surface);
