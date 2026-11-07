@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 from shapely.geometry import Point, shape
 from shapely.ops import unary_union
@@ -69,7 +70,7 @@ def test_does_not_spill_into_the_hudson(manhattan):
 @needs_graph
 def test_paths_keep_their_curves(manhattan):
     # Rebuilt graphs store the points along curved paths.
-    assert manhattan.curved_edge_count > 1000
+    assert np.count_nonzero(np.diff(manhattan.shape_start)) > 1000
 
 
 @needs_graph

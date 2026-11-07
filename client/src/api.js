@@ -7,7 +7,7 @@ const API_URL = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 // Give up on a request after this long (card 14). Longer than the API
 // takes to wake up on Render's free plan (about a minute), so a slow start
 // still gets through, but a hung request doesn't spin forever.
-export const REQUEST_TIMEOUT_MS = 70_000;
+const REQUEST_TIMEOUT_MS = 70_000;
 
 // fetch() with a timeout. When time runs out the promise rejects with a
 // TimeoutError, which errors.js turns into a readable message.

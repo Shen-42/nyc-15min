@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BOROUGHS, boroughAt, boxesOverlap, isInCity, isInCityLimits } from "./city";
+import { BOROUGHS, boroughAt, boxesOverlap, isInCityLimits } from "./city";
 
 describe("the five boroughs (card 15)", () => {
   it("finds the borough a spot is in", () => {
@@ -11,8 +11,8 @@ describe("the five boroughs (card 15)", () => {
   });
 
   it("leaves out the rivers and New Jersey", () => {
-    expect(isInCity([40.706, -73.996])).toBe(false); // East River under the Brooklyn Bridge
-    expect(isInCity([40.7178, -74.0431])).toBe(false); // Jersey City
+    expect(boroughAt([40.706, -73.996])).toBe(null); // East River under the Brooklyn Bridge
+    expect(boroughAt([40.7178, -74.0431])).toBe(null); // Jersey City
   });
 
   it("counts the rivers inside the city's limits, but not New Jersey", () => {

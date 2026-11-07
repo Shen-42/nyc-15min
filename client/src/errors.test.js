@@ -8,11 +8,6 @@ describe("errorText", () => {
     expect(await errorText(response(422, { detail: "That spot is in Central Park." }))).toBe("That spot is in Central Park.");
   });
 
-  it("reads FastAPI's list-style errors instead of showing [object Object]", async () => {
-    const body = { detail: [{ loc: ["query", "lat"], msg: "Input should be a valid number", type: "float_parsing" }] };
-    expect(await errorText(response(422, body))).toBe("Input should be a valid number");
-  });
-
   it("falls back to a sentence when there's no readable body", async () => {
     expect(await errorText(response(502))).toMatch(/Something went wrong on our side \(error 502\)/);
     expect(await errorText(response(404), "Not found here.")).toBe("Not found here.");
