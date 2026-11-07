@@ -28,10 +28,6 @@ WALK_SPEED_M_PER_MIN = 80
 # picks the closest by true distance, so flattening never picks wrong.
 NEAREST_CANDIDATES = 8
 
-# Copies of the graph in minutes to keep: walking, and one per wheelchair
-# setup (card 11). Each is about 8 MB for all five boroughs.
-MAX_SEARCH_GRAPHS = 4
-
 
 def distance_m(lat1, lng1, lat2, lng2):
     """Straight-line distance between two points in meters (haversine formula)."""
@@ -126,10 +122,11 @@ class WalkGraph:
         # 64-bit on every search, which made each one about 10x slower.
         self.weight = np.concatenate([edge_length, edge_length])[order]
         self.edge_of = np.concatenate([np.arange(len(edge_a)), np.arange(len(edge_a))])[order].astype(np.int32)
-        # The search runs on copies of the graph in minutes, one per speed
-        # (and wheelchair penalty table), made when first needed.
-        self._minute_graphs = {}
-        self._in_minutes(WALK_SPEED_M_PER_MIN, None)
+        # The search runs on a copy of the graph in minutes. Walking's is made
+        # now; the last other speed and penalty table (in practice, the
+        # wheelchair's) is kept in _other. Each is about 8 MB for the city.
+        self._walk_minutes = self._build_minutes(WALK_SPEED_M_PER_MIN, None)
+        self._other = None  # (speed, penalty table, matrix)
 
         # Nearest-node index on a flat map in meters. Fine at city scale; the
         # final pick uses the true distance.
@@ -252,13 +249,18 @@ class WalkGraph:
         return dict(zip(self.ids[hit].tolist(), dist[hit].tolist()))
 
     def _in_minutes(self, speed_m_per_min, node_penalty):
-        """The graph with each edge in minutes at this speed, plus the penalty
-        for entering a node, if any. Made once per speed and penalty table."""
+        """The graph in minutes at this speed and penalty table, reused while
+        they stay the same."""
         penalty = node_penalty or None
-        key = (speed_m_per_min, id(penalty), len(penalty or ()))
-        cached = self._minute_graphs.get(key)
-        if cached is not None and cached[0] is penalty:
-            return cached[1]
+        if speed_m_per_min == WALK_SPEED_M_PER_MIN and penalty is None:
+            return self._walk_minutes
+        if self._other is None or self._other[0] != speed_m_per_min or self._other[1] is not penalty:
+            self._other = (speed_m_per_min, penalty, self._build_minutes(speed_m_per_min, penalty))
+        return self._other[2]
+
+    def _build_minutes(self, speed_m_per_min, penalty):
+        """The graph with each edge in minutes at this speed, plus the penalty
+        for entering a node, if any."""
         minutes = self.weight / speed_m_per_min
         if penalty:
             extra = np.zeros(len(self.ids))
@@ -269,10 +271,4 @@ class WalkGraph:
             extra[at[known]] = added[known]
             minutes = minutes + extra[self.col]
         n = len(self.ids)
-        matrix = csr_matrix((minutes, self.col, self.indptr), shape=(n, n))
-        if len(self._minute_graphs) >= MAX_SEARCH_GRAPHS:
-            # Start over, keeping walking at the usual pace.
-            self._minute_graphs = {k: v for k, v in self._minute_graphs.items() if k[0] == WALK_SPEED_M_PER_MIN and k[1] == id(None)}
-        # The table itself is kept too, so its id can't be reused by another.
-        self._minute_graphs[key] = (penalty, matrix)
-        return matrix
+        return csr_matrix((minutes, self.col, self.indptr), shape=(n, n))
