@@ -22,7 +22,7 @@ import numpy as np
 import shapely
 from scipy import ndimage
 from shapely import STRtree
-from shapely.geometry import MultiPolygon, Point, Polygon, box, mapping, shape
+from shapely.geometry import Point, Polygon, box, mapping, shape
 from shapely.ops import unary_union
 
 # How far on each side of a street the shape extends. 40 m covers the
@@ -31,10 +31,6 @@ BUFFER_M = 40
 
 # Straighten the outline to within this many meters, to send fewer points.
 SIMPLIFY_M = 5
-
-# Points used to round each corner of a widened street (per quarter circle),
-# for the old way of widening in scripts/time_area.py.
-QUAD_SEGS = 2
 
 M_PER_DEG_LAT = 110_540
 
@@ -350,35 +346,9 @@ def row_runs(marked):
     return rects
 
 
-def fill_holes(geom):
-    """Fill every hole: block interiors, lawns, plazas.
-
-    Lakes and rivers are removed afterwards by trimming to `land`, so a hole
-    filled here is never water.
-    """
-    polygons = list(geom.geoms) if isinstance(geom, MultiPolygon) else [geom]
-    filled = [Polygon(p.exterior) for p in polygons]
-    return filled[0] if len(filled) == 1 else MultiPolygon(filled)
-
-
 def polygons_only(geom):
     """Trimming can leave stray lines or points where edges touch. Keep the areas."""
     if geom.geom_type in ("Polygon", "MultiPolygon"):
         return geom
     parts = [g for g in getattr(geom, "geoms", []) if g.geom_type in ("Polygon", "MultiPolygon")]
     return unary_union(parts) if parts else Polygon()
-
-
-def cut_path(points, fraction):
-    """The first `fraction` (0 to 1) of a path, measured along its length."""
-    pieces = [math.dist(a, b) for a, b in zip(points, points[1:])]
-    target = sum(pieces) * fraction
-    out = [points[0]]
-    for (a, b), piece in zip(zip(points, points[1:]), pieces):
-        if piece >= target:
-            f = target / piece if piece else 0
-            out.append((a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f))
-            return out
-        out.append(b)
-        target -= piece
-    return out

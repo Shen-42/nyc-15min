@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 
 import shapely
-from shapely.geometry import LineString, MultiLineString, box, shape
+from shapely.geometry import LineString, MultiLineString, MultiPolygon, Polygon, box, shape
 from shapely.ops import unary_union
 
 SERVER_DIR = Path(__file__).resolve().parent.parent
@@ -27,10 +27,7 @@ from graph import WALK_SPEED_M_PER_MIN, WalkGraph  # noqa: E402
 from walk_area import (  # noqa: E402
     BUFFER_M,
     M_PER_DEG_LAT,
-    QUAD_SEGS,
     SIMPLIFY_M,
-    cut_path,
-    fill_holes,
     load_land,
     load_water,
     polygons_only,
@@ -54,6 +51,36 @@ TRIES = {
     "grid of 5 m squares": 5,
     "grid of 10 m squares (now)": 10,
 }
+
+# Points used to round each corner of a widened street (per quarter circle),
+# for the old way of widening.
+QUAD_SEGS = 2
+
+
+def cut_path(points, fraction):
+    """The first `fraction` (0 to 1) of a path, measured along its length."""
+    pieces = [math.dist(a, b) for a, b in zip(points, points[1:])]
+    target = sum(pieces) * fraction
+    out = [points[0]]
+    for (a, b), piece in zip(zip(points, points[1:]), pieces):
+        if piece >= target:
+            f = target / piece if piece else 0
+            out.append((a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f))
+            return out
+        out.append(b)
+        target -= piece
+    return out
+
+
+def fill_holes(geom):
+    """Fill every hole: block interiors, lawns, plazas.
+
+    Lakes and rivers are removed afterwards by trimming to `land`, so a hole
+    filled here is never water.
+    """
+    polygons = list(geom.geoms) if isinstance(geom, MultiPolygon) else [geom]
+    filled = [Polygon(p.exterior) for p in polygons]
+    return filled[0] if len(filled) == 1 else MultiPolygon(filled)
 
 
 def draw(graph, start, times, land, options, steps):
