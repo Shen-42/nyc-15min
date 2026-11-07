@@ -170,8 +170,39 @@ def load_water(path):
 
 
 # Names that read with "the" in front: "the Hudson River", "the Arthur
-# Kill", but "Jamaica Bay", "Newtown Creek", "Long Island Sound".
+# Kill", "the Kill Van Kull", but "Jamaica Bay", "Newtown Creek", "Long
+# Island Sound".
 THE_ENDINGS = ("River", "Canal", "Kill", "Ocean", "Channel")
+
+
+class NearestName:
+    """The named water nearest a click, from lines and points: the center
+    lines of the big rivers and the label points of bays, which have no
+    outline to be inside (card 15). A line counts within LINE_DEGREES (about
+    1.3 km, more than half the Hudson's width), a label point within
+    POINT_DEGREES (about 4 km, across most of Jamaica Bay)."""
+
+    LINE_DEGREES = 0.015
+    POINT_DEGREES = 0.05
+
+    def __init__(self, items):
+        self.names = [name for name, _ in items]
+        self.shapes = [shape for _, shape in items]
+        self.tree = STRtree(self.shapes)
+
+    def __len__(self):
+        return len(self.names)
+
+    def find(self, point):
+        """The nearest name in reach, or None."""
+        best, best_distance = None, math.inf
+        for i in self.tree.query(point, predicate="dwithin", distance=self.POINT_DEGREES):
+            shape = self.shapes[i]
+            reach = self.POINT_DEGREES if shape.geom_type in ("Point", "MultiPoint") else self.LINE_DEGREES
+            distance = shape.distance(point)
+            if distance <= reach and distance < best_distance:
+                best, best_distance = self.names[i], distance
+        return best
 
 
 def water_phrase(name, lat, lng):
@@ -181,7 +212,10 @@ def water_phrase(name, lat, lng):
     where Lower New York Bay ends); anywhere else, "the water"."""
     if not name:
         return "the Atlantic Ocean" if lat < 40.585 and lng > -73.94 else "the water"
-    return f"the {name}" if name.split()[-1] in THE_ENDINGS else name
+    if name.startswith("The "):
+        return "the " + name[4:]  # "The Narrows" mid-sentence
+    words = name.split()
+    return f"the {name}" if words[-1] in THE_ENDINGS or words[0] == "Kill" else name
 
 
 def walking_area(graph, start, times, max_minutes, speed_m_per_min, land=None, cell_m=CELL_M):

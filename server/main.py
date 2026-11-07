@@ -34,7 +34,7 @@ from rate_limit import RateLimited, RateLimiter, make_counter
 from scoring import parse_weights, score_walk, settings_with_weights
 from shared_cache import make_shared_cache
 from usage import make_usage
-from walk_area import Outlines, empty_islands, water_phrase, load_boroughs, load_not_lived_on, load_parks, load_water, walking_area
+from walk_area import NearestName, Outlines, empty_islands, water_phrase, load_boroughs, load_not_lived_on, load_parks, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.npz"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
@@ -58,6 +58,8 @@ boroughs = Outlines([])
 islands = Outlines([])
 # The rivers and bays by name (card 15).
 waterways = Outlines([])
+# The rivers by center line and the bays by label point, for water with no outline.
+water_labels = NearestName([])
 # Islands with almost no paths, found from the graph when it loads.
 empty_land = Outlines([])
 # The five boroughs' shoreline minus lakes and ponds, for trimming walking areas.
@@ -98,7 +100,7 @@ def peak_memory_mb():
 
 @asynccontextmanager
 async def lifespan(app):
-    global walk_graph, boroughs, islands, empty_land, waterways, land, water, parks, amenities, places_index, amenity_by_id, ramp_penalty, grid, shared_cache
+    global walk_graph, boroughs, islands, empty_land, waterways, water_labels, land, water, parks, amenities, places_index, amenity_by_id, ramp_penalty, grid, shared_cache
     if AMENITIES_FILE.exists():
         amenities = load_amenities(AMENITIES_FILE)
         places_index = PlaceIndex(amenities)
@@ -115,8 +117,11 @@ async def lifespan(app):
     else:
         print(f"No water file at {WATER_FILE}. Run: python scripts/build_water.py")
     if WATERWAYS_FILE.exists():
-        waterways = Outlines(load_water(WATERWAYS_FILE))
-        print(f"Loaded {len(waterways)} rivers and bays")
+        named = load_water(WATERWAYS_FILE)
+        areas = ("Polygon", "MultiPolygon")
+        waterways = Outlines([(n, s) for n, s in named if s.geom_type in areas])
+        water_labels = NearestName([(n, s) for n, s in named if s.geom_type not in areas])
+        print(f"Loaded {len(waterways)} named water areas and {len(water_labels)} river lines and bay labels")
     if PARKS_FILE.exists():
         parks = Outlines(load_parks(PARKS_FILE))
         print(f"Loaded {len(parks)} parks")
@@ -356,6 +361,7 @@ def plan_walk(request, kind, lat, lng, minutes, timer, mode="walk"):
     # the server can name the water.
     if len(boroughs) and not boroughs.find(clicked)[0]:
         _, name = waterways.find(clicked)
+        name = name or water_labels.find(clicked)
         raise HTTPException(status_code=422, detail=f"That's in {water_phrase(name, lat, lng)}. Pick a spot on land.")
     in_park, name = parks.find(clicked)
     if in_park:

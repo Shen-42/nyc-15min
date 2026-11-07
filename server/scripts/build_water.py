@@ -10,13 +10,19 @@ there. The download is shared with build_amenities.py (scripts/osm_places.py).
 
 It also writes data/waterways.json: the named rivers, canals, bays, and
 straits inside the city's limits, so a click in one can say which ("That's
-in the East River", card 15).
+in the East River", card 15). That's a second, separate download, of the
+whole area inside the city's limits, water included: the big rivers and
+bays have no outline in OpenStreetMap, since they're part of the sea there.
+Only their center lines (the Hudson, the East River) or a single label
+point (Jamaica Bay) carry the name, out in the water where the first
+download, of the land, doesn't reach.
 """
 
 import json
 import sys
 from pathlib import Path
 
+import osmnx as ox
 import shapely
 from shapely.geometry import Polygon, mapping
 
@@ -35,10 +41,12 @@ CITY_OUTLINE_FILE = SERVER_DIR / "geo" / "city-outline.json"
 
 TAGS = {"natural": "water", "landuse": "reservoir"}
 SKIP_WATER_TYPES = {"river", "canal", "stream"}
-# Named water kept in waterways.json: rivers and canals mapped as areas,
-# and bays and straits.
-WATERWAY_TYPES = {"river", "canal", "stream", "tidal_channel"}
-WATERWAY_NATURAL = {"bay", "strait"}
+# Named water kept in waterways.json: rivers and canals mapped as areas or
+# as center lines, and bays and straits as areas or label points.
+WATERWAY_TAGS = {"natural": ["water", "bay", "strait"], "waterway": ["river", "canal", "tidal_channel"]}
+WATER_TYPES = {"river", "canal", "tidal_channel"}  # water=* on an area
+LINE_TYPES = {"river", "canal", "tidal_channel"}  # waterway=* on a line
+BAY_TYPES = ["bay", "strait"]  # natural=* on an area or a point
 
 # Ignore fountains and small decorative pools.
 MIN_AREA_M2 = 500
@@ -59,13 +67,8 @@ def main():
     rings = json.loads(CITY_OUTLINE_FILE.read_text())["rings"]
     city = shapely.make_valid(shapely.union_all([Polygon([(lng, lat) for lat, lng in r]) for r in rings]))
 
-    water, waterways = [], []
+    water = []
     for _, row in features.iterrows():
-        name = text(row.get("name"))
-        if name and (has_tag(row, "natural", list(WATERWAY_NATURAL)) or text(row.get("water")) in WATERWAY_TYPES):
-            geom = polygons_only(row.geometry.intersection(city))
-            if not geom.is_empty:
-                waterways.append({"name": name, "geometry": mapping(geom.simplify(0.0001))})  # about 10 m
         if not any(has_tag(row, key, value) for key, value in TAGS.items()):
             continue  # a park, school, or shop from the shared download
         if text(row.get("water")) in SKIP_WATER_TYPES:
@@ -82,6 +85,30 @@ def main():
     named = sorted({w["name"] for w in water if w["name"]})
     print(f"Saved {len(water)} bodies of water to {OUTPUT_FILE}")
     print("Named:", ", ".join(named))
+
+    print("\nDownloading the names of the rivers and bays...")
+    named = overpass.download("rivers and bays", lambda: ox.features_from_polygon(city.simplify(0.001), tags=WATERWAY_TAGS))
+    waterways = []
+    for _, row in named.iterrows():
+        name = text(row.get("name"))
+        geom = row.geometry
+        if not name or geom is None:
+            continue
+        kind = geom.geom_type
+        if kind in ("Polygon", "MultiPolygon"):
+            keep = has_tag(row, "natural", BAY_TYPES) or text(row.get("water")) in WATER_TYPES
+        elif kind in ("LineString", "MultiLineString"):
+            keep = text(row.get("waterway")) in LINE_TYPES
+        else:  # a point
+            keep = has_tag(row, "natural", BAY_TYPES)
+        if not keep:
+            continue  # a lake, a stream, or an unnamed bit
+        clipped = geom.intersection(city)
+        if kind in ("Polygon", "MultiPolygon"):
+            clipped = polygons_only(clipped)
+        if clipped.is_empty:
+            continue
+        waterways.append({"name": name, "geometry": mapping(clipped.simplify(0.0001))})  # about 10 m
 
     WATERWAYS_FILE.write_text(json.dumps(waterways, separators=(",", ":")))
     size_kb = WATERWAYS_FILE.stat().st_size / 1000

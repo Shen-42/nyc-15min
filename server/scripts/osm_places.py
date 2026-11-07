@@ -14,14 +14,13 @@ import overpass
 # Every tag either script looks for. A place matches if it has any of them.
 # The cemeteries, golf courses, nature reserves, wetlands, airports, and
 # prisons are outlines of land where nobody lives (build_amenities.py, card 15).
-# The bays and straits name the water a click lands in (build_water.py).
 TAGS = {
     "shop": ["supermarket", "grocery", "greengrocer"],
     "amenity": ["pharmacy", "clinic", "doctors", "hospital", "school", "grave_yard", "prison"],
     "healthcare": "pharmacy",
     "leisure": ["park", "nature_reserve", "golf_course"],
     "railway": "station",
-    "natural": ["water", "wetland", "bay", "strait"],
+    "natural": ["water", "wetland"],
     "landuse": ["reservoir", "cemetery"],
     "aeroway": "aerodrome",
 }

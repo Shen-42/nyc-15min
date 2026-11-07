@@ -6,7 +6,7 @@ from shapely.geometry import Point, shape
 from shapely.ops import unary_union
 
 from graph import WALK_SPEED_M_PER_MIN, WalkGraph
-from walk_area import Outlines, cut_path, empty_islands, row_runs, water_phrase, load_boroughs, load_land, load_water, walking_area
+from walk_area import NearestName, Outlines, cut_path, empty_islands, row_runs, water_phrase, load_boroughs, load_land, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.npz"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
@@ -226,5 +226,20 @@ def test_water_is_named_the_way_people_say_it():
     assert water_phrase("Arthur Kill", 40.56, -74.24) == "the Arthur Kill"
     assert water_phrase("Jamaica Bay", 40.61, -73.84) == "Jamaica Bay"
     assert water_phrase("Long Island Sound", 40.85, -73.75) == "Long Island Sound"
+    assert water_phrase("Kill Van Kull", 40.64, -74.1) == "the Kill Van Kull"
+    assert water_phrase("The Narrows", 40.61, -74.04) == "the Narrows"
     assert water_phrase(None, 40.55, -73.85) == "the Atlantic Ocean"  # off the Rockaways
     assert water_phrase(None, 40.55, -74.0) == "the water"  # Lower New York Bay, unnamed
+
+
+def test_nearest_name_finds_rivers_by_center_line_and_bays_by_label():
+    """Card 15: the Hudson and East River have no outline, only a line."""
+    from shapely.geometry import LineString
+
+    names = NearestName([
+        ("Hudson River", LineString([(-74.02, 40.70), (-74.00, 40.80)])),
+        ("Jamaica Bay", Point(-73.83, 40.61)),
+    ])
+    assert names.find(Point(-74.015, 40.75)) == "Hudson River"  # about 300 m off the line
+    assert names.find(Point(-73.86, 40.60)) == "Jamaica Bay"  # about 2.7 km from the label
+    assert names.find(Point(-73.95, 40.65)) is None  # inland Brooklyn, near neither
