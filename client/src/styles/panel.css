@@ -890,3 +890,44 @@
     text-decoration-thickness: 2px;
   }
 }
+
+/* ---- Address search ----
+   The suggestions list sits in the panel's flow, under the box, rather than
+   floating over it: on phones the panel clips anything that sticks out. */
+.search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.search__input {
+  width: 100%;
+}
+
+.search__list {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-1) 0;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(31 36 48 / 0.12);
+}
+
+.search__option {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap-target);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+}
+
+/* The suggestion the arrow keys or the mouse are on. */
+.search__option[aria-selected="true"] {
+  background: var(--color-hover);
+}
+
+.search__status {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}

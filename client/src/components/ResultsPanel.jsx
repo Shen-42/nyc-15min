@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { CATEGORIES, verdict } from "../data/categories";
 import { useMediaQuery } from "../hooks";
+import AddressSearch from "./AddressSearch";
 import CategoryRow from "./CategoryRow";
 import LayerInfo from "./LayerInfo";
 import Message from "./Message";
@@ -44,6 +45,7 @@ export default function ResultsPanel({
   onPlaceSaved,
   onGoToPlace,
   onRemovePlace,
+  onPickAddress,
 }) {
   const loading = status === "loading";
   const categoryById = Object.fromEntries((result?.score.categories ?? []).map((c) => [c.category, c]));
@@ -89,6 +91,9 @@ export default function ResultsPanel({
             </button>
           ))}
       </div>
+
+      {/* Choosing a spot without the map: by address (keyboard and screen readers). */}
+      <AddressSearch onPick={onPickAddress} />
 
       {/* Every message goes here, in one style (card 14). */}
       <div className="messages">

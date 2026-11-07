@@ -358,6 +358,7 @@ export default function App() {
         onPlaceSaved={saved.addPlace}
         onGoToPlace={goToPlace}
         onRemovePlace={saved.removePlace}
+        onPickAddress={goToPlace}
       />
       </ErrorBoundary>
       {account.enabled && (

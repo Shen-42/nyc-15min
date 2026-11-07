@@ -62,7 +62,7 @@ services:
     staticPublishPath: client/dist
     # Security headers for every page. The Content-Security-Policy lists the
     # only places the site may load from or talk to: itself, the map tiles,
-    # the API, and Supabase (sign-in). MapLibre (the base map) fetches the
+    # the API, Supabase (sign-in), and NYC GeoSearch (the address search). MapLibre (the base map) fetches the
     # vector tiles, fonts, and icons from Stadia and draws in a worker it
     # starts from a blob: URL. Anything else, such as a script
     # injected into the page, is blocked. 'unsafe-inline' for styles is
@@ -71,7 +71,7 @@ services:
     headers:
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tiles.stadiamaps.com; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' https://nyc-15min-api.onrender.com https://*.supabase.co https://tiles.stadiamaps.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tiles.stadiamaps.com; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' https://nyc-15min-api.onrender.com https://*.supabase.co https://tiles.stadiamaps.com https://geosearch.planninglabs.nyc; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
       - path: /*
         name: X-Content-Type-Options
         value: nosniff

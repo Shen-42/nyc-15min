@@ -81,6 +81,6 @@
 - Account forms have visible labels, fill in from password managers (`autocomplete`), and show each error under its field, announced to screen readers. Dialogs use the native `<dialog>`, so focus stays inside and Escape closes them.
 - Deleting an account is set apart in red and takes a second step, where "Keep account" is the default and has the focus.
 
-Not yet supported: choosing a point by keyboard. An address search would fix that.
+- A spot can be chosen without the map: "Search an address" at the top of the panel suggests addresses as you type, from NYC Planning Labs' [GeoSearch](https://labs-geosearch-docs.netlify.app/docs), which is built on the city's own address database and needs no key. It follows the ARIA combobox pattern: the arrow keys move through the suggestions, Enter picks one (or the first), Escape closes the list, and screen readers hear how many suggestions there are. Picking one flies the map there and runs the same search as a click.
 
 [Back to the README](../README.md)
