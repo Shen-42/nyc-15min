@@ -28,9 +28,11 @@
 
 /* ---- Score ---- */
 
+/* minmax(0, 1fr): the text column wraps its lines instead of growing past
+   the panel when something in it is wide. */
 .score-summary {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   column-gap: var(--space-4);
   align-items: center;
 }
@@ -566,6 +568,14 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+}
+
+/* "Name this spot" needs room for a box and two buttons, more than the
+   column beside the number has. It takes its own row under the score,
+   across the full width, so nothing is pushed sideways. */
+.score-summary > .save-spot__form {
+  grid-column: 1 / -1;
+  margin-top: var(--space-2);
 }
 
 .save-spot__row {
