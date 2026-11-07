@@ -1,46 +1,50 @@
 {
-  "tag": "data-2026-11-04-10",
-  "built": "2026-11-04",
+  "tag": "data-2026-11-07-11",
+  "built": "2026-11-07",
   "files": {
     "walk_graph.npz": {
       "sha256": "7249d1d3b20ad6f32712a9e2684937bba71d650ed80beb41ad1310d01d8c524a",
       "bytes": 37522574
     },
     "amenities.json": {
-      "sha256": "494ea24dedce679993751f8781d4732a8ac03b9b5032f162975de8f658471157",
-      "bytes": 2073104
+      "sha256": "0e35c190c30cf26ad99ef48d71c8f2481c4ddb32c0d3ae259ca3bbeb1f0f07c6",
+      "bytes": 1855305
     },
     "parks.json": {
-      "sha256": "ac108363cf7e0ff8aa965baca9436ab10f0b2e09d567953af806c5dc3122e1ba",
-      "bytes": 1292424
+      "sha256": "429a0addb48693cde0cc6fa9cd49c7becedd09be1d6150bd51a875046b2a975b",
+      "bytes": 1039601
     },
     "water.json": {
-      "sha256": "3f619816b08ac9168b7b87669abc0063ea24f1acf36216e278131d16b6178ad7",
-      "bytes": 481805
+      "sha256": "b773332ba3c659183ac2ced583e5e989fd463da0f6a3c9012885c5d0a670fbd6",
+      "bytes": 432453
+    },
+    "waterways.json": {
+      "sha256": "ef88186bf0af91908810dbeb804493f82f56fac9f3a2954033b3c1cd5b1c332f",
+      "bytes": 46669
     },
     "ramps.json": {
       "sha256": "58c6f8f4845f59b7c22e44e3ceba0f85d45dd586565a17b13101e856ceb95250",
       "bytes": 7169260
     },
     "grid-bronx.json": {
-      "sha256": "f60082144c4854b20596e6272771caea8d217eccfa283afb0608af6e973d7321",
-      "bytes": 422704
+      "sha256": "d25354d59b86fb6cc3b609fc63b44ca1779f1d165e7ff33256b927ab7ed44902",
+      "bytes": 403242
     },
     "grid-brooklyn.json": {
-      "sha256": "02edd9be5cf38b7b8e52141ade0c72ede0db4489df58a881c06b24c9cd163279",
-      "bytes": 620617
+      "sha256": "7beef6b8f90e616e1bc18395474980334b9bc4f6ab06ec5ecf8c116b0470bfad",
+      "bytes": 594667
     },
     "grid-manhattan.json": {
-      "sha256": "a6f25da7fe286ee5b27afbb65e436208d4e055e18205659dd2cdfd92bc6306db",
-      "bytes": 255037
+      "sha256": "48b3b81ff75ecaa2d51b6f4c9f33af02b0b6137cff2c2e8b4ded1726b6a64a06",
+      "bytes": 237745
     },
     "grid-queens.json": {
-      "sha256": "c70f56a170c9da52e6fab40550b06e7a3e68c6bf9bc09a8e5e82fade200eae45",
-      "bytes": 1025896
+      "sha256": "0bae6e5e3a97bdf7e77fc91db2e96077658bedb530439572593e2e87db7a1560",
+      "bytes": 960238
     },
     "grid-staten-island.json": {
-      "sha256": "a879da75eda196565ef73b44d96f82f192c7c94e3eb0362b1178ce1995ee131f",
-      "bytes": 825584
+      "sha256": "1c39c9bfc33016320407bdaca4d07314d2e4c0d930d135e6d78bb615751a0420",
+      "bytes": 734487
     }
   }
 }
