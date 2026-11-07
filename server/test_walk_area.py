@@ -7,7 +7,7 @@ from shapely.geometry import Point, shape
 from shapely.ops import unary_union
 
 from graph import WALK_SPEED_M_PER_MIN, WalkGraph
-from walk_area import NearestName, Outlines, cut_path, empty_islands, row_runs, water_phrase, load_boroughs, load_land, load_water, walking_area
+from walk_area import NearestName, Outlines, empty_islands, row_runs, water_phrase, load_boroughs, load_land, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.npz"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
@@ -18,14 +18,6 @@ LAND = load_land()
 if WATER_FILE.exists():
     LAND = LAND.difference(unary_union([s for _, s in load_water(WATER_FILE)]))
 needs_graph = pytest.mark.skipif(not GRAPH_FILE.exists(), reason="run scripts/build_graph.py first")
-
-
-def test_cut_path_halfway_along_a_bend():
-    # An L-shaped path: 100 m east, then 100 m north. Half of it ends at the corner.
-    path = [(0, 0), (100, 0), (100, 100)]
-    assert cut_path(path, 0.5) == [(0, 0), (100, 0)]
-    assert cut_path(path, 0.75) == [(0, 0), (100, 0), (100, 50)]
-    assert cut_path(path, 1.0)[-1] == (100, 100)
 
 
 @pytest.fixture(scope="module")
