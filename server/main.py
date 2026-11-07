@@ -34,7 +34,7 @@ from rate_limit import RateLimited, RateLimiter, make_counter
 from scoring import parse_weights, score_walk, settings_with_weights
 from shared_cache import make_shared_cache
 from usage import make_usage
-from walk_area import NearestName, Outlines, empty_islands, in_open_ocean, load_waterways, water_phrase, load_boroughs, load_not_lived_on, load_parks, load_water, walking_area
+from walk_area import NearestName, Outlines, big_land, empty_islands, in_open_ocean, load_waterways, water_phrase, load_boroughs, load_not_lived_on, load_parks, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.npz"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
@@ -120,7 +120,7 @@ async def lifespan(app):
         named = load_waterways(WATERWAYS_FILE)
         areas = ("Polygon", "MultiPolygon")
         waterways = Outlines([(n, s) for n, s, _ in named if s.geom_type in areas])
-        water_labels = NearestName([item for item in named if item[1].geom_type not in areas])
+        water_labels = NearestName([item for item in named if item[1].geom_type not in areas], land=big_land())
         print(f"Loaded {len(waterways)} named water areas and {len(water_labels)} river lines and bay labels")
     if PARKS_FILE.exists():
         parks = Outlines(load_parks(PARKS_FILE))

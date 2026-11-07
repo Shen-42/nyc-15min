@@ -22,8 +22,8 @@ import numpy as np
 import shapely
 from scipy import ndimage
 from shapely import STRtree
-from shapely.geometry import Point, Polygon, box, mapping, shape
-from shapely.ops import unary_union
+from shapely.geometry import LineString, Point, Polygon, box, mapping, shape
+from shapely.ops import nearest_points, unary_union
 
 # How far on each side of a street the shape extends. 40 m covers the
 # buildings along a street and fills in a normal Manhattan block from both sides.
@@ -186,13 +186,27 @@ class NearestName:
 
     So a click in Jamaica Bay is "Jamaica Bay", not the marsh channel it
     happens to be nearest, while a click in a canal off the bays still gets
-    the canal's name."""
+    the canal's name.
+
+    A name only counts if it can be reached over water: the straight line
+    from the click to the nearest point of the river or label mustn't cross
+    the big pieces of land (`land`, see big_land). Without that, a click in
+    the Hudson off Greenwich Village was named "Wallabout Bay", whose label
+    is 4 km away on the other side of Lower Manhattan."""
 
     REACH = {"river": 0.015, "label": 0.05, "channel": 0.006}
 
-    def __init__(self, items):
+    # A line to a name may run along land this far (about 50 m) and still
+    # count: shorelines and the ends of piers.
+    CROSSING_DEGREES = 0.0005
+
+    def __init__(self, items, land=None):
         """items: (name, shape, kind). A kind of None is worked out from the
-        shape, for files made before kinds were saved."""
+        shape, for files made before kinds were saved. land: the land a line
+        to a name mustn't cross, or None to skip that check."""
+        self.land = land
+        if land is not None:
+            shapely.prepare(land)
         self.names, self.shapes, self.kinds = [], [], []
         for name, shape, kind in items:
             self.names.append(name)
@@ -209,12 +223,36 @@ class NearestName:
         for i in self.tree.query(point, predicate="dwithin", distance=max(self.REACH.values())):
             kind = self.kinds[i]
             distance = self.shapes[i].distance(point)
-            if distance <= self.REACH[kind] and distance < best.get(kind, (math.inf, None))[0]:
-                best[kind] = (distance, self.names[i])
+            if distance > self.REACH[kind] or distance >= best.get(kind, (math.inf, None))[0]:
+                continue
+            if self.land is not None:
+                _, there = nearest_points(point, self.shapes[i])
+                path = LineString([point, there])
+                if self.land.intersects(path) and self.land.intersection(path).length > self.CROSSING_DEGREES:
+                    continue  # on the other side of land
+            best[kind] = (distance, self.names[i])
         for kind in ("river", "label", "channel"):
             if kind in best:
                 return best[kind][1]
         return None
+
+
+# Land bigger than this blocks a name (NearestName): the boroughs' mainland,
+# Staten Island, and the Rockaways, but not the small islands in the bays,
+# which a bay's name should reach past.
+BIG_LAND_KM2 = 5
+
+
+def big_land(path=BOROUGHS_FILE, min_km2=BIG_LAND_KM2):
+    """The pieces of land of at least min_km2, as one shape in (lng, lat)."""
+    m2_per_sq_degree = 111_320 * math.cos(math.radians(40.7)) * M_PER_DEG_LAT
+    pieces = []
+    for rings in json.loads(Path(path).read_text())["boroughs"].values():
+        for ring in rings:
+            land = shapely.make_valid(Polygon([(x, y) for y, x in ring]))
+            if land.area * m2_per_sq_degree >= min_km2 * 1_000_000:
+                pieces.append(land)
+    return unary_union(pieces)
 
 
 def load_waterways(path):

@@ -237,3 +237,16 @@ def test_nearest_name_finds_rivers_by_center_line_and_bays_by_label():
     assert names.find(Point(-74.015, 40.75)) == "Hudson River"  # about 300 m off the line
     assert names.find(Point(-73.86, 40.60)) == "Jamaica Bay"  # about 2.7 km from the label, nearer the channel
     assert names.find(Point(-73.95, 40.65)) is None  # inland Brooklyn, near neither
+
+
+def test_water_names_dont_reach_across_land():
+    """A Hudson click off Greenwich Village was called "Wallabout Bay", whose
+    label is across Lower Manhattan. Small islands don't block a name."""
+    from walk_area import big_land
+
+    names = NearestName([("Wallabout Bay", Point(-73.9749, 40.7051), "label")], land=big_land())
+    assert names.find(Point(-74.018, 40.729)) is None  # the Hudson by Pier 40
+    assert names.find(Point(-73.9765, 40.7060)) == "Wallabout Bay"  # in the bay itself
+
+    bay = NearestName([("Jamaica Bay", Point(-73.83, 40.61), "label")], land=big_land())
+    assert bay.find(Point(-73.86, 40.60)) == "Jamaica Bay"  # past the marsh islands
