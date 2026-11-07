@@ -64,7 +64,7 @@ export const CITY_OUTLINE = outline.rings;
 
 // Ray casting: draw a line from the point going east and count how many
 // polygon edges it crosses. An odd count means the point is inside.
-export function isInsidePolygon([lat, lng], polygon) {
+function isInsidePolygon([lat, lng], polygon) {
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
     const [latI, lngI] = polygon[i];
@@ -81,10 +81,6 @@ export function isInsidePolygon([lat, lng], polygon) {
 // The borough a point is in, or null for water and anywhere outside the city.
 export function boroughAt(point) {
   return BOROUGHS.find((b) => b.rings.some((ring) => isInsidePolygon(point, ring))) ?? null;
-}
-
-export function isInCity(point) {
-  return boroughAt(point) !== null;
 }
 
 // Inside the city's limits, which run through the rivers and bays: on land,

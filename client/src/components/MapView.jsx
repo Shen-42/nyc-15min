@@ -5,7 +5,7 @@ import BoroughPicker from "./BoroughPicker";
 // map, or the gap finder (card 12), and a menu to move to a borough (card
 // 15). They change the map, not the score, so they sit on the map, the way
 // map apps place layer switches, and the panel keeps to the results.
-export const VIEWS = [
+const VIEWS = [
   { id: "walk", label: "Your walk" },
   { id: "heat", label: "Score map" },
   { id: "gaps", label: "Gap finder" },

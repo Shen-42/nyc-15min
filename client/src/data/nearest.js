@@ -2,7 +2,7 @@
 // the panel lists as nearest. The rest are small dots, so a dense block reads
 // as "these are the closest" rather than a pile of circles. Selecting a
 // category in the panel brings all of its markers to full size (map.css).
-export const FULL_MARKERS_PER_CATEGORY = 3;
+const FULL_MARKERS_PER_CATEGORY = 3;
 
 // The nearest few places in each category, as a set of "category:id" keys.
 export function nearestPlaces(places, perCategory = FULL_MARKERS_PER_CATEGORY) {

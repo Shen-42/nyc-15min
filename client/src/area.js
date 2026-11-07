@@ -2,7 +2,7 @@ import { apiFetch } from "./api";
 import { worthRetrying } from "./errors";
 
 // Wait this long before trying the shaded area a second time.
-export const AREA_RETRY_DELAY_MS = 1500;
+const AREA_RETRY_DELAY_MS = 1500;
 
 // The shaded walking area for a search (card 14). It's the slowest request
 // and the least important (the score and places come separately), so a

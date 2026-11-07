@@ -420,10 +420,7 @@ def plan_walk(request, kind, lat, lng, minutes, timer, mode="walk"):
     # clicks share cached results.
     budget = round(minutes - gap_m / SPEEDS[mode], 1)
 
-    try:
-        times = cached_search(start, budget, mode)
-    except NotImplementedError:
-        raise HTTPException(status_code=501, detail="The 15-minute search isn't written yet (graph.py, reachable_within).")
+    times = cached_search(start, budget, mode)
     timer.lap("search")
     return start, gap_m, budget, times
 

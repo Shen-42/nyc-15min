@@ -1,11 +1,9 @@
 // Readable messages for everything that can go wrong with a request (card 14).
 
-// The message for an error response. The API answers with { detail: "..." };
-// FastAPI's own input checks used to answer with a list, so that's handled too.
+// The message for an error response. The API answers with { detail: "..." }.
 export async function errorText(res, fallback) {
   const body = await res.json().catch(() => ({}));
   if (typeof body.detail === "string") return body.detail;
-  if (Array.isArray(body.detail) && body.detail[0]?.msg) return body.detail[0].msg;
   if (fallback) return fallback;
   if (res.status >= 500) return `Something went wrong on our side (error ${res.status}). Try again in a minute.`;
   return `The request didn't work (error ${res.status}).`;

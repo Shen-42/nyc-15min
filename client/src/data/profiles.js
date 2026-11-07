@@ -11,7 +11,7 @@ export const IMPORTANCE = [
 ];
 
 // The server's own defaults: groceries count most, then the subway.
-export const DEFAULT_WEIGHTS = { grocery: 3, subway: 2, pharmacy: 1, clinic: 1, park: 1, school: 1 };
+const DEFAULT_WEIGHTS = { grocery: 3, subway: 2, pharmacy: 1, clinic: 1, park: 1, school: 1 };
 
 // Starting points people can pick and then adjust. These are judgment calls,
 // not survey results.

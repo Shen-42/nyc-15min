@@ -83,7 +83,7 @@ export function inPark(cell, categories) {
 // The heat map's colors: viridis, a palette that stays in order for
 // color-blind viewers and in grayscale. Scores between two stops blend.
 // Canvas can't read CSS variables, so the colors live here.
-export const HEAT_STOPS = [
+const HEAT_STOPS = [
   [0, [68, 1, 84]], // #440154
   [25, [59, 82, 139]], // #3b528b
   [50, [33, 145, 140]], // #21918c

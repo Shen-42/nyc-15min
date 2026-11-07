@@ -304,13 +304,6 @@
   min-width: 0;
 }
 
-.needs__legend {
-  padding: 0;
-  margin-bottom: var(--space-2);
-  color: var(--color-muted);
-  font-size: var(--text-sm);
-}
-
 .needs__presets {
   display: flex;
   flex-wrap: wrap;

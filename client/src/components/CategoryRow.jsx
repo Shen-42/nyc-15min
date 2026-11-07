@@ -7,7 +7,6 @@ export default function CategoryRow({ category, result, selected, onSelect, hour
   const closedCount = result?.closed_count ?? 0;
   const openCount = result?.count ?? 0;
   const first = nearest[0];
-  // Older responses have no "counted"; treat those as counted.
   const counted = result?.counted !== false;
   // One line: "H Mart · 6 min". The full list opens with the row.
   const detail = first

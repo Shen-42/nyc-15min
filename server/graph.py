@@ -13,7 +13,6 @@ Node ids are OpenStreetMap ids everywhere outside this file, as before.
 import json
 import math
 from collections.abc import Mapping
-from pathlib import Path
 
 import numpy as np
 from scipy.sparse import csr_matrix
@@ -140,11 +139,7 @@ class WalkGraph:
 
     @classmethod
     def from_file(cls, path):
-        """Load a graph saved by save() (.npz), or the older JSON format."""
-        path = Path(path)
-        if path.suffix == ".json":
-            data = json.loads(path.read_text())
-            return cls(data["nodes"], data["edges"], data.get("meta"), data.get("curb_nodes", ()), data.get("streets"))
+        """Load a graph saved by save()."""
         with np.load(path, allow_pickle=False) as d:
             graph = cls.__new__(cls)
             graph._setup(
@@ -185,11 +180,6 @@ class WalkGraph:
     @property
     def edge_count(self):
         return len(self.edge_a)
-
-    @property
-    def curved_edge_count(self):
-        """How many edges keep the points along a curved path."""
-        return int(np.count_nonzero(np.diff(self.shape_start)))
 
     def _index(self, node_id):
         """Position of an OpenStreetMap node id in the arrays. KeyError if absent."""
