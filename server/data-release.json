@@ -1,5 +1,5 @@
 {
-  "tag": "data-2026-11-07-12",
+  "tag": "data-2026-11-07-13",
   "built": "2026-11-07",
   "files": {
     "walk_graph.npz": {
@@ -19,8 +19,8 @@
       "bytes": 432453
     },
     "waterways.json": {
-      "sha256": "5b7b5ba37716d0510ddb9728665e92ac7e92271792b57ff16302c72756d63f1c",
-      "bytes": 318281
+      "sha256": "18044aff897932c698b57e133024496740c631309b3ec58010d97459e6f751d5",
+      "bytes": 96576
     },
     "ramps.json": {
       "sha256": "58c6f8f4845f59b7c22e44e3ceba0f85d45dd586565a17b13101e856ceb95250",
