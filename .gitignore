@@ -23,3 +23,4 @@ server/data/
 .DS_Store
 .env
 *.local
+CLAUDE.md
