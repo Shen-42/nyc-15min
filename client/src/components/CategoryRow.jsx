@@ -9,8 +9,9 @@ export default function CategoryRow({ category, result, selected, onSelect, hour
   const first = nearest[0];
   // Older responses have no "counted"; treat those as counted.
   const counted = result?.counted !== false;
+  // One line: "H Mart · 6 min". The full list opens with the row.
   const detail = first
-    ? `${placeName(first)}, ${formatMinutes(first.minutes)}`
+    ? `${placeName(first, category)} · ${Math.max(1, Math.round(first.minutes))} min`
     : hourLabel && closedCount
       ? "None open within 15 min"
       : "None within 15 min";
@@ -26,25 +27,23 @@ export default function CategoryRow({ category, result, selected, onSelect, hour
         <span className="glyph" aria-hidden="true">
           {category.glyph}
         </span>
-        <span>
-          <span className="category-row__label">{category.label}</span>
-          <span className="category-row__detail">{detail}</span>
+        {/* Label and nearest place on one line; a long name is cut with "…"
+            (the title shows it whole on hover). */}
+        <span className="category-row__text" title={`${category.label}: ${detail}`}>
+          <span className="category-row__line">
+            <span className="category-row__label">{category.label}</span>{" "}
+            <span className="category-row__detail">{detail}</span>
+          </span>
           {hourLabel && closedCount > 0 && (
-            <span className="category-row__detail">
+            <span className="category-row__open">
               {openCount} of {openCount + closedCount} open at {hourLabel}
             </span>
           )}
         </span>
         {counted ? (
           <span className="category-row__score">
-            <span className="meter" aria-hidden="true">
-              {/* A CSS variable is the one inline style: the width is data. */}
-              <span className="meter__fill" style={{ "--value": `${result?.score ?? 0}%` }} />
-            </span>
-            <span>
-              {result?.score ?? 0}
-              <span className="visually-hidden"> out of 100</span>
-            </span>
+            {result?.score ?? 0}
+            <span className="visually-hidden"> out of 100</span>
           </span>
         ) : (
           <span className="category-row__off">Off</span>
@@ -57,7 +56,7 @@ export default function CategoryRow({ category, result, selected, onSelect, hour
             <ol className="nearest-list" aria-label={`Nearest ${category.label.toLowerCase()}`}>
               {nearest.map((p, i) => (
                 <li key={i}>
-                  {placeName(p)}, {formatMinutes(p.minutes)}
+                  {placeName(p, category)}, {formatMinutes(p.minutes)}
                 </li>
               ))}
             </ol>
@@ -68,7 +67,7 @@ export default function CategoryRow({ category, result, selected, onSelect, hour
               <ul className="nearest-list nearest-list--closed">
                 {closed.map((p, i) => (
                   <li key={i}>
-                    {p.name ?? "Unnamed"}, {formatMinutes(p.minutes)}
+                    {placeName({ ...p, status: null }, category)}, {formatMinutes(p.minutes)}
                   </li>
                 ))}
               </ul>
@@ -81,8 +80,8 @@ export default function CategoryRow({ category, result, selected, onSelect, hour
 }
 
 // "Duane Reade (hours unknown)" when a time is chosen and OpenStreetMap
-// has no hours for the place.
-function placeName(place) {
-  const name = place.name ?? "Unnamed";
+// has no hours for the place. With no name listed, what it is: "A pharmacy".
+function placeName(place, category) {
+  const name = place.name ?? `A ${category.one}`;
   return place.status === "unknown" ? `${name} (hours unknown)` : name;
 }

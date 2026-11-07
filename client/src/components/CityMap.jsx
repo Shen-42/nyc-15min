@@ -123,6 +123,28 @@ function FitArea({ area, areaKey }) {
   return null;
 }
 
+// A small key for the shaded area (heuristic 2: say what the grey means): in
+// the bottom left corner, where maps keep their legends, or on phones, where
+// the results sheet covers the bottom, at the top left under the map buttons.
+function AreaKey({ label }) {
+  const map = useMap();
+  useEffect(() => {
+    const Key = L.Control.extend({
+      onAdd() {
+        const box = L.DomUtil.create("div", "map-key");
+        box.innerHTML = '<span class="map-key__swatch" aria-hidden="true"></span><span class="map-key__label"></span>';
+        box.querySelector(".map-key__label").textContent = `Shaded: ${label}`;
+        L.DomEvent.disableClickPropagation(box);
+        return box;
+      },
+    });
+    const phone = window.matchMedia("(max-width: 767px)").matches;
+    const control = new Key({ position: phone ? "topleft" : "bottomleft" }).addTo(map);
+    return () => control.remove();
+  }, [map, label]);
+  return null;
+}
+
 // Moves the map to a borough picked in the panel (card 15).
 function FitTo({ target }) {
   const map = useMap();
@@ -176,6 +198,7 @@ export default function CityMap({
   flyTo = null,
   fitTo = null,
   pending = false,
+  areaLabel = "15-minute walk",
   note = null,
   onNoteClose = () => {},
   onViewChange = () => {},
@@ -261,6 +284,7 @@ export default function CityMap({
         <Marker position={selectedPoint} icon={PENDING_ICON} interactive={false} keyboard={false} />
       )}
       {walking && <FitArea area={area} areaKey={area ? areaKey : null} />}
+      {walking && area && <AreaKey label={areaLabel} />}
 
       {/* Why a click was turned away, at the spot itself (the panel says it too). */}
       {note && (

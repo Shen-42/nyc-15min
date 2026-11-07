@@ -106,12 +106,12 @@
 
 .category-row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto; /* the middle can shrink, so long names cut off */
   align-items: center;
   gap: var(--space-3);
   width: 100%;
   min-height: var(--tap-target);
-  padding: var(--space-3) var(--space-2);
+  padding: var(--space-2);
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -125,38 +125,33 @@
   box-shadow: inset 4px 0 0 var(--cat);
 }
 
-.category-row__label {
+/* "Groceries H Mart · 6 min" on one line, cut with "…" when too long. */
+.category-row__line {
   display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-row__label {
   font-weight: 700;
 }
 
 .category-row__detail {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+/* "3 of 5 open at 9 pm", under the line, only with a time picked. */
+.category-row__open {
   display: block;
   color: var(--color-muted);
   font-size: var(--text-sm);
 }
 
 .category-row__score {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-}
-
-/* The bar is decoration: the number beside it carries the value. */
-.meter {
-  width: 48px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--color-line);
-  overflow: hidden;
-}
-
-.meter__fill {
-  display: block;
-  height: 100%;
-  width: var(--value);
-  background: var(--cat);
 }
 
 .nearest {
@@ -415,10 +410,6 @@
   .panel__results {
     transition: opacity 150ms ease-out;
   }
-
-  .meter__fill {
-    transition: width 300ms ease-out;
-  }
 }
 
 /* The dark diamond, drawn inline in the score sentence as a map key (card 11). */
@@ -434,8 +425,10 @@
 
 /* ---- Rank and the score map / gap finder box (card 12) ---- */
 
+/* Second in line after the verdict: regular weight, grey. */
 .score-summary__rank {
-  font-weight: 700;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
 }
 
 .layer {
@@ -573,8 +566,8 @@
 /* "Name this spot" needs room for a box and two buttons, more than the
    column beside the number has. It takes its own row under the score,
    across the full width, so nothing is pushed sideways. */
-.score-summary > .save-spot__form {
-  grid-column: 1 / -1;
+.score-actions .save-spot__form {
+  flex: 1 1 100%;
   margin-top: var(--space-2);
 }
 
@@ -1096,4 +1089,102 @@
   .search__clear:hover {
     color: var(--color-ink);
   }
+}
+
+/* ---- "Using: Parent needs · By wheelchair": the settings behind the score ---- */
+.score-summary__settings {
+  font-size: var(--text-sm);
+  color: var(--color-ink);
+}
+
+/* ---- Share and Save spot, side by side under the score ---- */
+.score-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.score-actions .button--link {
+  min-height: 32px;
+  padding: 0;
+}
+
+/* "Name this spot" needs the full width: the row takes both columns then. */
+.score-summary > .score-actions:has(.save-spot__form) {
+  grid-column: 1 / -1;
+}
+
+.score-actions:has(.save-spot__form) .score-actions__share {
+  display: none;
+}
+
+/* ---- About: headings between its paragraphs ---- */
+.about__heading {
+  margin-bottom: calc(-1 * var(--space-2));
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.dialog {
+  overflow-y: auto;
+}
+
+/* ---- "Recent" over the remembered spots in the address list ---- */
+.search__heading {
+  padding: var(--space-1) var(--space-3) 0;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+/* The circled "?" that opens "How is this scored?". Sized in em, from the
+   text around it, so it's a little taller than a capital letter and sits
+   centered on the line, without pushing the lines apart. An invisible area
+   around it makes it easier to hit. */
+.help-button {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 1.25em;
+  height: 1.25em;
+  margin-left: 0.15em;
+  padding: 0;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  background: none;
+  color: var(--color-ink);
+  font: inherit;
+  font-weight: 700;
+  line-height: 1;
+  /* middle, not a fixed offset: the button's own baseline is its "?", so
+     an offset dropped the circle below the line. */
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+/* The "?" itself, a little smaller than the text. */
+.help-button::before {
+  content: "?";
+  font-size: 0.8em;
+}
+
+.help-button::after {
+  content: "";
+  position: absolute;
+  inset: -0.4em;
+}
+
+@media (hover: hover) {
+  .help-button:hover {
+    background: var(--color-ink);
+    color: var(--color-surface);
+  }
+}
+
+/* "About this map", last in the panel. */
+.panel__about {
+  align-self: flex-start;
+  margin-top: var(--space-2);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
 }

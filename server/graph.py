@@ -228,6 +228,16 @@ class WalkGraph:
                 best_i, best_dist = i, d
         return int(self.ids[best_i]), best_dist
 
+    def nearby_nodes(self, lat, lng, k):
+        """The k nodes nearest a point, nearest first, as [(node id, lat, lng, meters)]."""
+        k = min(k, len(self.ids))
+        _, found = self._tree.query([lng * self._x_scale, lat * 111_320], k=k)
+        near = [
+            (int(self.ids[i]), float(self.lat[i]), float(self.lng[i]), distance_m(lat, lng, self.lat[i], self.lng[i]))
+            for i in np.atleast_1d(found).tolist()
+        ]
+        return sorted(near, key=lambda n: n[3])
+
     def reachable_within(self, start, max_minutes, speed_m_per_min=WALK_SPEED_M_PER_MIN, node_penalty=None):
         """Every node you can walk to from `start` within `max_minutes`.
 

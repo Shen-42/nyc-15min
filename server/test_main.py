@@ -283,3 +283,30 @@ def test_clicks_on_islands_where_nobody_lives_are_turned_away():
         roosevelt = c.get("/api/places", params={"lat": 40.7620, "lng": -73.9497})  # people live here
         assert roosevelt.status_code == 200
     rate_limiter.counter.clear()
+
+
+def test_a_click_in_a_park_suggests_the_nearest_street_outside_it():
+    """Heuristic 9: "That's in Central Park" comes with a way forward."""
+    from pathlib import Path
+
+    import pytest
+
+    data = Path(__file__).parent / "data"
+    if not (data / "walk_graph.npz").exists() or not (data / "parks.json").exists():
+        pytest.skip("run scripts/build_graph.py and scripts/build_amenities.py first")
+    from main import rate_limiter
+
+    rate_limiter.counter.clear()
+    great_lawn = {"lat": 40.7812, "lng": -73.9665}
+    with TestClient(app) as c:
+        refused = c.get("/api/places", params=great_lawn)
+        assert refused.status_code == 422
+        assert refused.headers.get("X-Suggest") == "nearest-street"
+        street = c.get("/api/nearest-street", params=great_lawn)
+        assert street.status_code == 200
+        spot = street.json()
+        assert spot["distance_m"] < 1000
+        assert c.get("/api/places", params={"lat": spot["lat"], "lng": spot["lng"]}).status_code == 200
+        rikers = c.get("/api/places", params={"lat": 40.7934, "lng": -73.8845})
+        assert "X-Suggest" not in rikers.headers  # its nearest street is on the island
+    rate_limiter.counter.clear()

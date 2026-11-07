@@ -11,6 +11,9 @@ import TimeOfDay from "./TimeOfDay";
 import SavedPlaces from "../account/SavedPlaces";
 import Starters from "./Starters";
 import Dialog from "../account/Dialog";
+import About from "./About";
+import ShareButton from "./ShareButton";
+import { matchingPreset } from "../data/profiles";
 import SaveSpot from "../account/SaveSpot";
 import { formatHour } from "../data/time";
 
@@ -50,6 +53,7 @@ export default function ResultsPanel({
   onPickAddress,
   onUseLocation,
   locating,
+  recent = [],
 }) {
   const loading = status === "loading";
   const categoryById = Object.fromEntries((result?.score.categories ?? []).map((c) => [c.category, c]));
@@ -57,6 +61,15 @@ export default function ResultsPanel({
   // "How is this scored?": a short explanation in a dialog, so it takes no
   // room in the panel until asked for.
   const [helpOpen, setHelpOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  // The settings behind the score, named only when they differ from the
+  // defaults (heuristic 1): "Using: Parent needs · By wheelchair · Open at 9 pm".
+  const preset = matchingPreset(weights);
+  const settingsUsed = [
+    preset?.id === "default" ? null : preset ? `${preset.label} needs` : "Custom needs",
+    result?.mode === "wheelchair" ? "By wheelchair" : null,
+    timeLabel ? `Open at ${timeLabel}` : null,
+  ].filter(Boolean);
   const open = sheetPosition === "open";
 
   return (
@@ -100,7 +113,7 @@ export default function ResultsPanel({
       </div>
 
       {/* Choosing a spot without the map: by address (keyboard and screen readers). */}
-      <AddressSearch onPick={onPickAddress} />
+      <AddressSearch onPick={onPickAddress} recent={recent} />
       {/* Before the first search, right under the box: one tap to a result. */}
       {!result && !loading && view === "walk" && <Starters onUseLocation={onUseLocation} locating={locating} />}
 
@@ -112,7 +125,9 @@ export default function ResultsPanel({
         {waking && !serverDown && <Message kind="warn" text="Starting up. This can take up to a minute…" />}
         {account.notice && <Message kind={account.notice.kind} text={account.notice.text} />}
         {view !== "walk" && gridError && <Message kind="error" text={gridError.text} onRetry={gridError.retry} />}
-        {message && <Message kind={message.kind} text={message.text} onRetry={message.retry} />}
+        {message && (
+          <Message kind={message.kind} text={message.text} onRetry={message.retry} action={message.action} />
+        )}
       </div>
 
       {view !== "walk" && (
@@ -137,7 +152,7 @@ export default function ResultsPanel({
         {result && (
           <p className="visually-hidden">
             Score {result.score.score} out of 100. {verdict(result.score.score)}
-            {result.score.rank != null && ` ${rankText(result.score.rank)}`}
+            {result.score.rank != null && ` ${rankText(result.score.rank)}.`}
           </p>
         )}
       </div>
@@ -159,34 +174,40 @@ export default function ResultsPanel({
               {verdict(result.score.score)}
             </p>
             {/* Cards 12 and 15. Only for walking at any time, which is how the grid was scored. */}
-            {result.score.rank != null && <p className="score-summary__rank">{rankText(result.score.rank)}</p>}
-            <p className="score-summary__detail">
-              {result.mode === "wheelchair" && "By wheelchair. "}
-              Nearest places: {result.score.proximity_minutes} min away on average.{" "}
-              <button type="button" className="link-button" onClick={() => setHelpOpen(true)}>
-                How is this scored?
-              </button>
-              {timeLabel && ` Counting places open at ${timeLabel}.`}
-              {result.mode === "wheelchair" && result.barriers.length > 0 && (
-                <>
-                  {" "}
-                  {result.barriers.length === 1 ? "1 corner" : `${result.barriers.length} corners`} nearby{" "}
-                  {result.barriers.length === 1 ? "has" : "have"} no curb ramp (
-                  <span className="barrier-key" aria-hidden="true" />
-                  <span className="visually-hidden">dark diamonds on the map</span>).
-                </>
-              )}
-            </p>
-            {/* Under the text, beside the number, so it adds no row of its own. */}
-            {account.enabled && selectedPoint && (
-              <SaveSpot
-                key={selectedPoint.join(",")}
-                point={selectedPoint}
-                account={account}
-                onNeedSignIn={onSignIn}
-                onSaved={onPlaceSaved}
-              />
+            {/* The rank is the line people ask about, so the "?" sits at its end. */}
+            {result.score.rank != null && (
+              <p className="score-summary__rank">
+                {/* A no-break space, so the "?" never wraps away from the last word. */}
+                {rankText(result.score.rank)}{"\u00a0"}
+                <HelpButton onClick={() => setHelpOpen(true)} />
+              </p>
             )}
+            {settingsUsed.length > 0 && (
+              <p className="score-summary__settings">Using: {settingsUsed.join(" · ")}</p>
+            )}
+            {result.mode === "wheelchair" && result.barriers.length > 0 && (
+              <p className="score-summary__detail">
+                {result.barriers.length === 1 ? "1 corner" : `${result.barriers.length} corners`} nearby{" "}
+                {result.barriers.length === 1 ? "has" : "have"} no curb ramp (
+                <span className="barrier-key" aria-hidden="true" />
+                <span className="visually-hidden">dark diamonds on the map</span>).
+              </p>
+            )}
+            {/* One row of links under the text, beside the number. */}
+            <div className="score-actions">
+              <ShareButton />
+              {account.enabled && selectedPoint && (
+                <SaveSpot
+                  key={selectedPoint.join(",")}
+                  point={selectedPoint}
+                  account={account}
+                  onNeedSignIn={onSignIn}
+                  onSaved={onPlaceSaved}
+                />
+              )}
+              {/* No rank (wheelchair mode, a time picked): the "?" goes here instead. */}
+              {result.score.rank == null && <HelpButton onClick={() => setHelpOpen(true)} />}
+            </div>
           </div>
         </div>
       )}
@@ -218,7 +239,12 @@ export default function ResultsPanel({
         <NeedsProfile weights={weights} onChange={onWeightsChange} mode={mode} onModeChange={onModeChange} />
         {account.session && <SavedPlaces places={savedPlaces} onGo={onGoToPlace} onRemove={onRemovePlace} />}
       </div>
+      {/* At the end, after the settings: read once, so not in the header. */}
+      <button type="button" className="link-button panel__about" onClick={() => setAboutOpen(true)}>
+        About this map
+      </button>
       </div>
+      <About open={aboutOpen} onClose={() => setAboutOpen(false)} />
       <Dialog open={helpOpen} onClose={() => setHelpOpen(false)} title="How the score works">
         <div className="dialog__body">
           <p>
@@ -233,6 +259,11 @@ export default function ResultsPanel({
             &ldquo;Better than 72% of Manhattan&rdquo; compares this spot with every 100 m square of the borough where
             people live, scored the same way.
           </p>
+          {result && (
+            <p>
+              Here, the nearest place of each kind is {result.score.proximity_minutes} minutes away on average.
+            </p>
+          )}
         </div>
       </Dialog>
     </aside>
@@ -374,5 +405,20 @@ function ScoreSkeleton() {
         </div>
       ))}
     </div>
+  );
+}
+
+// "How is this scored?" as a small circled "?" at the end of a line: one
+// character wide, so it never wraps onto a line of its own. Its name for
+// screen readers, and its tooltip, is the full question.
+function HelpButton({ onClick }) {
+  return (
+    <button
+      type="button"
+      className="help-button"
+      onClick={onClick}
+      aria-label="How is this scored?"
+      title="How is this scored?"
+    />
   );
 }

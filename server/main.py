@@ -256,7 +256,7 @@ if allowed_origins:
         allow_origins=allowed_origins,
         allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type"],
-        expose_headers=["Retry-After"],
+        expose_headers=["Retry-After", "X-Suggest"],
     )
 
 
@@ -296,6 +296,34 @@ def nearest_node(
     node_id, dist = graph.nearest_node(lat, lng)
     node_lat, node_lng = graph.coords[node_id]
     return {"node_id": node_id, "lat": node_lat, "lng": node_lng, "distance_m": round(dist, 1)}
+
+
+# Sent with a turned-away click (water, a park, far from any street) so the
+# site can offer "Use the nearest street", which asks /api/nearest-street.
+# Not sent for islands where nobody lives: their nearest street is on the island.
+SUGGEST_STREET = {"X-Suggest": "nearest-street"}
+# How many nearby graph nodes /api/nearest-street looks through: about 1.3 km
+# around a click in Central Park, enough to reach a street outside it.
+NEARBY_CANDIDATES = 2000
+
+
+@app.get("/api/nearest-street")
+def nearest_street(
+    lat: float = Query(..., ge=40.47, le=40.93),
+    lng: float = Query(..., ge=-74.27, le=-73.68),
+):
+    """The nearest point on a street a search would accept: on land, and not
+    in a park, a lake, or on an island where nobody lives. For the site's
+    "Use the nearest street" after a click is turned away."""
+    graph = require_graph()
+    for node_id, node_lat, node_lng, dist in graph.nearby_nodes(lat, lng, NEARBY_CANDIDATES):
+        spot = Point(node_lng, node_lat)
+        if len(boroughs) and not boroughs.find(spot)[0]:
+            continue  # on a bridge or pier over the water
+        if any(outlines.find(spot)[0] for outlines in (islands, empty_land, water, parks)):
+            continue
+        return {"lat": node_lat, "lng": node_lng, "distance_m": round(dist)}
+    raise HTTPException(status_code=404, detail="No street nearby. Pick a spot on the map.")
 
 
 # Rate limit: each visitor (by IP address) gets SEARCHES_PER_MINUTE searches
@@ -355,19 +383,26 @@ def plan_walk(request, kind, lat, lng, minutes, timer, mode="walk"):
         raise HTTPException(status_code=422, detail="This island has no residential areas. Pick a spot where people live.")
     in_water, name = water.find(clicked)
     if in_water:
-        raise HTTPException(status_code=422, detail=f"That's in {name or 'the water'}. Pick a spot on land.")
+        raise HTTPException(
+            status_code=422, detail=f"That's in {name or 'the water'}. Pick a spot on land.", headers=SUGGEST_STREET
+        )
     # Rivers, bays, and the ocean: off the shoreline but inside the city's
     # limits, which run through the water. The site sends these clicks so
     # the server can name the water.
     if len(boroughs) and not boroughs.find(clicked)[0]:
         _, name = waterways.find(clicked)
         name = name or water_labels.find(clicked)
-        raise HTTPException(status_code=422, detail=f"That's in {water_phrase(name, lat, lng)}. Pick a spot on land.")
+        raise HTTPException(
+            status_code=422,
+            detail=f"That's in {water_phrase(name, lat, lng)}. Pick a spot on land.",
+            headers=SUGGEST_STREET,
+        )
     in_park, name = parks.find(clicked)
     if in_park:
         raise HTTPException(
             status_code=422,
             detail=f"That's in {name or 'a park'}. Pick a spot on a nearby street.",
+            headers=SUGGEST_STREET,
         )
 
     start, gap_m = graph.nearest_node(lat, lng)
@@ -377,6 +412,7 @@ def plan_walk(request, kind, lat, lng, minutes, timer, mode="walk"):
         raise HTTPException(
             status_code=422,
             detail=f"That's {gap_m:.0f} m from the nearest street. Pick a spot closer to one.",
+            headers=SUGGEST_STREET,
         )
 
     # The click is usually a few meters from the nearest node. Count that

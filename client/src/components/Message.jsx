@@ -2,13 +2,15 @@ import { useEffect, useRef } from "react";
 
 // Every message in the panel (card 14): one style, one place. Errors are
 // announced at once (role="alert"); other messages politely (role="status").
-// With onRetry, the message has its own "Try again" button, and keyboard
-// focus moves to it when the message appears.
-export default function Message({ kind = "warn", text, onRetry }) {
+// With onRetry, the message has its own "Try again" button. With action
+// ({ label, onClick }), it offers a way forward instead, such as "Use the
+// nearest street" after a click in a park. Keyboard focus moves to the
+// button when the message appears.
+export default function Message({ kind = "warn", text, onRetry, action }) {
   const button = useRef(null);
 
   useEffect(() => {
-    if (onRetry) button.current?.focus();
+    if (onRetry || action) button.current?.focus();
   }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -17,6 +19,11 @@ export default function Message({ kind = "warn", text, onRetry }) {
       {onRetry && (
         <button ref={button} type="button" className="button message__retry" onClick={onRetry}>
           Try again
+        </button>
+      )}
+      {!onRetry && action && (
+        <button ref={button} type="button" className="button message__retry" onClick={action.onClick}>
+          {action.label}
         </button>
       )}
     </div>

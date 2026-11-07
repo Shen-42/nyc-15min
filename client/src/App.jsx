@@ -14,6 +14,7 @@ import { BOROUGHS, boroughAt, boxesOverlap, isInCityLimits } from "./data/city";
 import { combineGrids, loadBoroughGrid, loadGridIndex } from "./data/grid";
 import { loadMode, loadWeights, saveMode, saveWeights, weightsToQuery } from "./data/profiles";
 import { atQuery, formatHour, nycNow } from "./data/time";
+import { addRecent, describeSpot, loadRecent } from "./data/recent";
 
 const MINUTES = 15;
 // Wait this long after the last change to the needs form before re-scoring,
@@ -76,6 +77,11 @@ export default function App() {
   const [mapNote, setMapNote] = useState(null);
   // True while the browser looks up where the visitor is.
   const [locating, setLocating] = useState(false);
+  // The last few spots looked at, for the address box (heuristic 6).
+  const [recent, setRecent] = useState(loadRecent);
+  // A name for the spot being searched, when it came with one (an address,
+  // a saved place). Map clicks are named from what the search finds.
+  const spotLabel = useRef(null);
   // Counts requests so a slow old response can't replace a newer one.
   const latestRequest = useRef(0);
   // The same for re-scores after the needs form changes.
@@ -237,8 +243,13 @@ export default function App() {
         // won't change by trying again; a server error might.
         const text = await errorText(res);
         const retry = worthRetrying(res.status) ? () => findWalkingArea(point) : undefined;
+        // In a park or the water, or far from any street: offer a way out.
+        const action =
+          res.headers.get("X-Suggest") === "nearest-street"
+            ? { label: "Use the nearest street", onClick: () => goToNearestStreet(point) }
+            : undefined;
         setResult(null);
-        setMessage({ kind: retry ? "error" : "warn", text, retry });
+        setMessage({ kind: retry ? "error" : "warn", text, retry, action });
         if (!retry) setMapNote({ point, text, key: requestId });
         setStatus("done");
         return;
@@ -260,6 +271,13 @@ export default function App() {
       });
       setServerDown(false);
       setStatus("done");
+      setRecent((list) =>
+        addRecent(list, {
+          label: spotLabel.current ?? describeSpot(data.amenities, data.borough),
+          lat: point[0],
+          lng: point[1],
+        })
+      );
     } catch (err) {
       if (requestId !== latestRequest.current) return;
       // fetch() throws when the server can't be reached at all, or when the
@@ -314,10 +332,25 @@ export default function App() {
   function goToPlace(place, { history = "push" } = {}) {
     const point = [place.lat, place.lng];
     setFlyTo({ point, key: Date.now() });
-    handleMapClick(point, { history });
+    handleMapClick(point, { history, label: place.label ?? place.name ?? null });
   }
 
-  function handleMapClick(point, { history = "push" } = {}) {
+  // "Use the nearest street": after a click in a park or the water, search
+  // from the nearest street point the server would accept.
+  async function goToNearestStreet(point) {
+    setMessage({ kind: "warn", text: "Finding the nearest street…" });
+    try {
+      const res = await apiFetch(`/api/nearest-street?lat=${point[0]}&lng=${point[1]}`);
+      if (!res.ok) return setMessage({ kind: "warn", text: await errorText(res) });
+      const street = await res.json();
+      goToPlace({ lat: street.lat, lng: street.lng });
+    } catch (err) {
+      setMessage({ kind: "error", text: failureText(err), retry: () => goToNearestStreet(point) });
+    }
+  }
+
+  function handleMapClick(point, { history = "push", label = null } = {}) {
+    spotLabel.current = label;
     setFocus(null);
     setMapNote(null);
     setView("walk"); // a click asks about one spot, so go back to your walk
@@ -330,7 +363,18 @@ export default function App() {
     } else {
       clearSpot();
       const text = "That's outside NYC. Pick a spot in the city.";
-      setMessage({ kind: "warn", text });
+      setMessage({
+        kind: "warn",
+        text,
+        action: {
+          label: "Go to Manhattan",
+          onClick: () => {
+            setMessage(null);
+            setMapNote(null);
+            pickBorough("Manhattan");
+          },
+        },
+      });
       setMapNote({ point, text, key: Date.now() });
     }
   }
@@ -422,6 +466,7 @@ export default function App() {
         onPickAddress={goToPlace}
         onUseLocation={locateMe}
         locating={locating}
+        recent={recent}
       />
       </ErrorBoundary>
       {account.enabled && (
@@ -454,6 +499,7 @@ export default function App() {
           areaKey={result?.id}
           // A pulsing ring at the spot until the shaded area is drawn.
           pending={status === "loading" || Boolean(result?.areaPending)}
+          areaLabel={result?.mode === "wheelchair" ? "15 minutes by wheelchair" : "15-minute walk"}
           note={mapNote}
           onNoteClose={(key) => setMapNote((n) => (n?.key === key ? null : n))}
           // Closed places leave the map; the panel still lists them.

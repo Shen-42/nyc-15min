@@ -300,3 +300,27 @@
   font-size: var(--text-sm);
   line-height: 1.4;
 }
+
+/* ---- "Shaded: 15-minute walk" (CityMap.jsx, AreaKey) ----
+   A quiet legend in the bottom left corner, where maps keep theirs; on
+   phones, where the sheet covers the bottom, at the top left. */
+.map-key {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: rgb(255 255 255 / 0.85);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+/* The same fill and outline as the walk area itself. */
+.map-key__swatch {
+  width: 16px;
+  height: 12px;
+  border: 2px solid var(--color-walk);
+  border-radius: 2px;
+  background: rgb(31 36 48 / 0.12);
+}

@@ -7,7 +7,7 @@ const MIN_LETTERS = 3;
 
 const STATUS_TEXT = {
   loading: "Searching…",
-  none: "No address in NYC matches that.",
+  none: "No address in NYC matches that. Try a house number and street, like 120 Broadway.",
   error: "Address search isn't working right now. You can still click the map.",
 };
 
@@ -15,7 +15,9 @@ const STATUS_TEXT = {
 // and screen reader users can use the site too. It follows the ARIA
 // combobox pattern: arrow keys move through the suggestions, Enter picks
 // one, Escape closes the list (or clears the box if it's already closed).
-export default function AddressSearch({ onPick }) {
+// With the box empty, the list shows the last few spots looked at
+// (heuristic 6), and pressing / anywhere jumps to the box (heuristic 7).
+export default function AddressSearch({ onPick, recent = [] }) {
   const [text, setText] = useState("");
   const [results, setResults] = useState([]);
   const [status, setStatus] = useState(null); // a key of STATUS_TEXT, or null
@@ -27,6 +29,22 @@ export default function AddressSearch({ onPick }) {
   const input = useRef(null);
   const id = useId();
   const listId = `${id}-list`;
+  // An empty box lists recent spots; typing lists addresses.
+  const showingRecent = text.trim() === "";
+  const options = showingRecent ? recent : results;
+
+  // "/" jumps to the box from anywhere, unless typing somewhere else.
+  useEffect(() => {
+    function onKey(event) {
+      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target;
+      if (target.closest?.("input, textarea, select, [contenteditable='true'], dialog[open]")) return;
+      event.preventDefault();
+      input.current?.focus();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     const query = text.trim();
@@ -68,24 +86,24 @@ export default function AddressSearch({ onPick }) {
   }
 
   function onKeyDown(event) {
-    if (event.key === "ArrowDown" && results.length) {
+    if (event.key === "ArrowDown" && options.length) {
       event.preventDefault();
       setOpen(true);
-      setActive((i) => (i + 1) % results.length);
-    } else if (event.key === "ArrowUp" && results.length) {
+      setActive((i) => (i + 1) % options.length);
+    } else if (event.key === "ArrowUp" && options.length) {
       event.preventDefault();
       setOpen(true);
-      setActive((i) => (i <= 0 ? results.length - 1 : i - 1));
-    } else if (event.key === "Enter" && results.length) {
+      setActive((i) => (i <= 0 ? options.length - 1 : i - 1));
+    } else if (event.key === "Enter" && options.length && (open || !showingRecent)) {
       event.preventDefault();
-      pick(results[Math.max(active, 0)]); // Enter alone takes the first suggestion
+      pick(options[Math.max(active, 0)]); // Enter alone takes the first suggestion
     } else if (event.key === "Escape") {
       if (open) setOpen(false);
       else setText("");
     }
   }
 
-  const showList = open && results.length > 0;
+  const showList = open && options.length > 0;
   return (
     <div className="search" role="search">
       <label htmlFor={`${id}-input`} className="visually-hidden">
@@ -103,6 +121,7 @@ export default function AddressSearch({ onPick }) {
         aria-expanded={showList}
         aria-controls={listId}
         aria-activedescendant={showList && active >= 0 ? `${listId}-${active}` : undefined}
+        aria-keyshortcuts="/"
         placeholder="Search an address"
         autoComplete="off"
         enterKeyHint="search"
@@ -110,8 +129,9 @@ export default function AddressSearch({ onPick }) {
         onChange={(event) => {
           setText(event.target.value);
           setOpen(true);
+          setActive(-1);
         }}
-        onFocus={() => results.length && setOpen(true)}
+        onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         onKeyDown={onKeyDown}
       />
@@ -123,7 +143,7 @@ export default function AddressSearch({ onPick }) {
           onClick={() => {
             setText("");
             setResults([]);
-            setOpen(false);
+            setActive(-1);
             input.current?.focus();
           }}
         >
@@ -132,8 +152,13 @@ export default function AddressSearch({ onPick }) {
       )}
       </div>
       {showList && (
-        <ul id={listId} role="listbox" className="search__list" aria-label="Addresses">
-          {results.map((result, i) => (
+        <ul id={listId} role="listbox" className="search__list" aria-label={showingRecent ? "Recent spots" : "Addresses"}>
+          {showingRecent && (
+            <li role="presentation" className="search__heading">
+              Recent
+            </li>
+          )}
+          {options.map((result, i) => (
             <li
               key={`${result.label}-${i}`}
               id={`${listId}-${i}`}
@@ -155,7 +180,16 @@ export default function AddressSearch({ onPick }) {
       )}
       {/* Read out by screen readers: how many suggestions, or what went wrong. */}
       <p className={open && status ? "search__status" : "visually-hidden"} role="status">
-        {open && (status ? STATUS_TEXT[status] : results.length ? `${results.length} addresses. Use the arrow keys to choose.` : "")}
+        {open &&
+          (showingRecent
+            ? recent.length
+              ? `${recent.length} recent spots. Use the arrow keys to choose.`
+              : ""
+            : status
+              ? STATUS_TEXT[status]
+              : results.length
+                ? `${results.length} addresses. Use the arrow keys to choose.`
+                : "")}
       </p>
     </div>
   );

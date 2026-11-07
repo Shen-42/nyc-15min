@@ -22,9 +22,9 @@ export default function BoroughPicker({ onPick }) {
   );
 }
 
-// "Better than 70% of Brooklyn and 64% of NYC." from the API's rank.
+// "Better than 70% of Brooklyn, 64% of NYC" from the API's rank.
 export function rankText(rank) {
   if (!rank) return null;
-  if (rank.borough == null) return `Better than ${rank.city}% of NYC.`;
-  return `Better than ${rank.borough}% of ${rank.name} and ${rank.city}% of NYC.`;
+  if (rank.borough == null) return `Better than ${rank.city}% of NYC`;
+  return `Better than ${rank.borough}% of ${rank.name}, ${rank.city}% of NYC`;
 }
