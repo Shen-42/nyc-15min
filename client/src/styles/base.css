@@ -15,8 +15,11 @@ body {
   background: var(--color-surface);
 }
 
+/* h3 too: its browser margin (about 1em above and below) is what left a
+   gap under "Delete account" and the About headings. */
 h1,
 h2,
+h3,
 p,
 ol,
 ul {

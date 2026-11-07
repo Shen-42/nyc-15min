@@ -712,7 +712,9 @@
   align-self: flex-start;
 }
 
+/* A heading sits close to the text it introduces: 4 px, not the section's 12. */
 .account__heading {
+  margin-bottom: calc(var(--space-1) - var(--space-3));
   font-size: var(--text-base);
   font-weight: 700;
 }
