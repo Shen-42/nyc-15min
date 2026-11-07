@@ -81,6 +81,13 @@
 - Account forms have visible labels, fill in from password managers (`autocomplete`), and show each error under its field, announced to screen readers. Dialogs use the native `<dialog>`, so focus stays inside and Escape closes them.
 - Deleting an account is set apart in red and takes a second step, where "Keep account" is the default and has the focus.
 
+- Before the first search, "Use my location" sits under the address box (inside the city only; the site's Permissions-Policy allows location for itself and nothing else).
+- A click is answered at once: a ring pulses at the spot until the shaded area is drawn, and the first search shows grey stand-ins for the score and rows. A click that's turned away ("That's in Central Park") is explained at the spot, in a small note on the map, as well as in the panel.
+- When the shaded area arrives, the map makes sure all of it is in view, on phones in the part of the map between the buttons and the results sheet. It only moves if part of the area is hidden.
+- The spot is in the page's address (`?lat=40.75800&lng=-73.98550`), so a result can be shared or bookmarked, and the back button returns to the previous spot.
+- The score shows its scale ("87/100"), and "How is this scored?" at the end of the line under it opens a short explanation in a dialog, so it takes no room in the panel.
+- Only the 3 nearest places of each category, the ones the panel lists, are full markers; the rest are small dots. Selecting a category brings all of its markers to full size. This keeps a dense block like Midtown readable.
+- On screens 1280 px wide or more the panel is 400 px wide instead of 360, so place names fit on one line.
 - A spot can be chosen without the map: "Search an address" at the top of the panel suggests addresses as you type, from NYC Planning Labs' [GeoSearch](https://labs-geosearch-docs.netlify.app/docs), which is built on the city's own address database and needs no key. It follows the ARIA combobox pattern: the arrow keys move through the suggestions, Enter picks one (or the first), Escape closes the list, and screen readers hear how many suggestions there are. Picking one flies the map there and runs the same search as a click.
 
 [Back to the README](../README.md)

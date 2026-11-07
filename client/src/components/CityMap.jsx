@@ -6,6 +6,7 @@ import {
   MapContainer,
   Marker,
   Polygon,
+  Popup,
   Tooltip,
   useMap,
   useMapEvents,
@@ -81,6 +82,47 @@ function FlyTo({ target }) {
   return null;
 }
 
+// A ring that pulses at the clicked spot while its results load, so the
+// map shows the click was heard. Animated in map.css (not with reduced motion).
+const PENDING_ICON = L.divIcon({
+  className: "pending-spot",
+  html: '<span class="pending-spot__ring"></span>',
+  iconSize: [44, 44],
+  iconAnchor: [22, 22],
+});
+
+// When a new walking area arrives, makes sure all of it is in view: on
+// phones, in the part of the map above the results sheet and below the map
+// buttons. Moves only if part of it is hidden, so a click doesn't jolt a
+// map that already shows the whole walk.
+function FitArea({ area, areaKey }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!area) return;
+    const container = map.getContainer();
+    const box = container.getBoundingClientRect();
+    const app = container.closest(".app");
+    const toolbar = parseFloat(getComputedStyle(app ?? container).getPropertyValue("--toolbar-space")) || 0;
+    // On phones the sheet lies over the bottom of the map; elsewhere the
+    // panel sits beside it and covers nothing.
+    const sheet = app?.querySelector(".panel");
+    const covered = window.matchMedia("(max-width: 767px)").matches && sheet
+      ? Math.max(0, box.bottom - sheet.getBoundingClientRect().top)
+      : 0;
+    if (covered > box.height * 0.6) return; // sheet open: little map to fit into
+    const topLeft = [16, toolbar + 8];
+    const bottomRight = [16, covered + 16];
+    const bounds = L.geoJSON(area).getBounds();
+    const visible = L.latLngBounds(
+      map.containerPointToLatLng([topLeft[0], box.height - bottomRight[1]]),
+      map.containerPointToLatLng([box.width - bottomRight[0], topLeft[1]])
+    );
+    if (visible.contains(bounds)) return;
+    map.flyToBounds(bounds, { paddingTopLeft: topLeft, paddingBottomRight: bottomRight, maxZoom: 16, duration: 0.6 });
+  }, [map, areaKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
 // Moves the map to a borough picked in the panel (card 15).
 function FitTo({ target }) {
   const map = useMap();
@@ -133,6 +175,9 @@ export default function CityMap({
   gapCategory,
   flyTo = null,
   fitTo = null,
+  pending = false,
+  note = null,
+  onNoteClose = () => {},
   onViewChange = () => {},
   onMapClick,
 }) {
@@ -211,6 +256,24 @@ export default function CityMap({
 
       {walking && selectedPoint && (
         <CircleMarker center={selectedPoint} radius={8} className="start-point" interactive={false} />
+      )}
+      {walking && selectedPoint && pending && (
+        <Marker position={selectedPoint} icon={PENDING_ICON} interactive={false} keyboard={false} />
+      )}
+      {walking && <FitArea area={area} areaKey={area ? areaKey : null} />}
+
+      {/* Why a click was turned away, at the spot itself (the panel says it too). */}
+      {note && (
+        <Popup
+          key={note.key}
+          position={note.point}
+          className="map-note"
+          autoPan={false}
+          // Closing it (✕, or a click elsewhere) clears it, unless a newer one has replaced it.
+          eventHandlers={{ remove: () => onNoteClose(note.key) }}
+        >
+          {note.text}
+        </Popup>
       )}
 
       <FlyTo target={flyTo} />

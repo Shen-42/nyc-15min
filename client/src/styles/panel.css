@@ -931,3 +931,169 @@
   color: var(--color-muted);
   font-size: var(--text-sm);
 }
+
+/* ---- "/100" after the score, so the number has a scale ---- */
+.score-summary__max {
+  margin-left: 2px;
+  color: var(--color-muted);
+  font-size: var(--text-base);
+  font-weight: 400;
+}
+
+/* ---- A button that reads as a link inside text: "How is this scored?",
+   "Use my location". Underlined like the other links, but inline, with no
+   box of its own. ---- */
+.link-button {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-ink);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.link-button:disabled {
+  color: var(--color-muted);
+  cursor: wait;
+}
+
+@media (hover: hover) {
+  .link-button:hover {
+    text-decoration-thickness: 2px;
+  }
+}
+
+/* "Use my location", right under the address box, pulled up close to it. */
+.starters__location {
+  align-self: flex-start;
+  margin-top: calc(var(--space-2) - var(--space-4));
+  font-size: var(--text-sm);
+}
+
+/* Empty groups take no room: without these, the panel's gap above and below
+   an empty message area or status line left a hole in the layout. The
+   status line stays in the page (empty), so screen readers still hear it. */
+.messages:empty {
+  display: none;
+}
+
+.panel__live:empty {
+  margin-top: calc(-1 * var(--space-4));
+}
+
+@media (max-width: 767px) {
+  .starters__location {
+    margin-top: 0;
+  }
+
+  .panel__live:empty {
+    margin-top: calc(-1 * var(--space-2));
+  }
+}
+
+/* ---- While the first search runs: grey stand-ins for the score and rows ---- */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.skeleton__score,
+.skeleton__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.skeleton__lines {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.skeleton__block {
+  display: block;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunk);
+}
+
+.skeleton__number {
+  width: 72px;
+  height: 56px;
+}
+
+.skeleton__line {
+  flex: 1;
+  height: 14px;
+}
+
+.skeleton__line--short {
+  flex: none;
+  width: 60%;
+}
+
+.skeleton__dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton__block {
+    animation: skeleton-fade 1.2s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes skeleton-fade {
+  from {
+    background: var(--color-surface-sunk);
+  }
+  to {
+    background: var(--color-hover);
+  }
+}
+
+/* Phones: only the score's stand-in, so the sheet's top stays short. */
+@media (max-width: 767px) {
+  .skeleton__row {
+    display: none;
+  }
+}
+
+/* ---- The ✕ in the search box ---- */
+.search__field {
+  position: relative;
+}
+
+.search__input {
+  padding-right: calc(var(--tap-target) + var(--space-1));
+}
+
+/* The browser's own clear button, where there is one, would sit beside ours. */
+.search__input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.search__clear {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--tap-target);
+  height: 100%;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .search__clear:hover {
+    color: var(--color-ink);
+  }
+}

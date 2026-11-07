@@ -60,3 +60,10 @@
   --tap-target: 44px;
   --panel-width: 360px;
 }
+
+/* Wide screens: a wider panel, so place names fit on one line. */
+@media (min-width: 1280px) {
+  :root {
+    --panel-width: 400px;
+  }
+}

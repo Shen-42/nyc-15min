@@ -80,7 +80,7 @@ services:
         value: strict-origin-when-cross-origin
       - path: /*
         name: Permissions-Policy
-        value: "camera=(), microphone=(), geolocation=(), payment=()"
+        value: "camera=(), microphone=(), geolocation=(self), payment=()"
       - path: /*
         name: Strict-Transport-Security
         value: max-age=31536000

@@ -71,6 +71,11 @@ export default function App() {
   const [accountOpen, setAccountOpen] = useState(false);
   // Where the map should move to, e.g. when a saved place is picked.
   const [flyTo, setFlyTo] = useState(null);
+  // A short note shown on the map at a spot that was turned away ("That's
+  // in Central Park"), as well as in the panel: { point, text, key } or null.
+  const [mapNote, setMapNote] = useState(null);
+  // True while the browser looks up where the visitor is.
+  const [locating, setLocating] = useState(false);
   // Counts requests so a slow old response can't replace a newer one.
   const latestRequest = useRef(0);
   // The same for re-scores after the needs form changes.
@@ -234,6 +239,7 @@ export default function App() {
         const retry = worthRetrying(res.status) ? () => findWalkingArea(point) : undefined;
         setResult(null);
         setMessage({ kind: retry ? "error" : "warn", text, retry });
+        if (!retry) setMapNote({ point, text, key: requestId });
         setStatus("done");
         return;
       }
@@ -248,6 +254,9 @@ export default function App() {
         score: data.score,
         mode: data.mode ?? "walk",
         barriers: data.barriers ?? [],
+        // True until the shaded area arrives or fails; the map shows a
+        // pulsing ring at the spot meanwhile.
+        areaPending: true,
       });
       setServerDown(false);
       setStatus("done");
@@ -270,6 +279,7 @@ export default function App() {
   // The score and places are already showing, so this is only a warning.
   function showArea(requestId, query, { data, failed }) {
     if (requestId !== latestRequest.current) return;
+    setResult((current) => (current?.id === requestId ? { ...current, areaPending: !failed && !data } : current));
     if (failed) {
       setMessage({
         kind: "warn",
@@ -287,7 +297,7 @@ export default function App() {
     if (!data) return;
     setResult((current) =>
       current?.id === requestId
-        ? { ...current, area: { type: "Feature", properties: {}, geometry: data.area } }
+        ? { ...current, area: { type: "Feature", properties: {}, geometry: data.area }, areaPending: false }
         : current
     );
   }
@@ -298,28 +308,79 @@ export default function App() {
     setAuthOpen(true);
   }
 
-  function goToPlace(place) {
+  // history: "push" adds the spot to the browser's history (a click),
+  // "replace" swaps the current entry (opening a shared link), "none" leaves
+  // it (the back button, which has already moved).
+  function goToPlace(place, { history = "push" } = {}) {
     const point = [place.lat, place.lng];
     setFlyTo({ point, key: Date.now() });
-    handleMapClick(point);
+    handleMapClick(point, { history });
   }
 
-  function handleMapClick(point) {
+  function handleMapClick(point, { history = "push" } = {}) {
     setFocus(null);
+    setMapNote(null);
     setView("walk"); // a click asks about one spot, so go back to your walk
     setSheet((s) => (s === "hidden" ? "peek" : s)); // and its score should show
     // Rivers and bays inside the city go to the server too, which names them.
     if (isInCityLimits(point)) {
+      writeUrlPoint(point, history);
       setSelectedPoint(point);
       findWalkingArea(point);
     } else {
-      latestRequest.current++; // ignore any search still in flight
-      pointRef.current = null;
-      setSelectedPoint(null);
-      setResult(null);
-      setStatus("idle");
-      setMessage({ kind: "warn", text: "That's outside NYC. Pick a spot in the city." });
+      clearSpot();
+      const text = "That's outside NYC. Pick a spot in the city.";
+      setMessage({ kind: "warn", text });
+      setMapNote({ point, text, key: Date.now() });
     }
+  }
+
+  function clearSpot() {
+    latestRequest.current++; // ignore any search still in flight
+    pointRef.current = null;
+    setSelectedPoint(null);
+    setResult(null);
+    setStatus("idle");
+    setMessage(null);
+  }
+
+  // The spot is in the page's address (?lat=40.758&lng=-73.9855), so a
+  // result can be shared or bookmarked, and the back button goes to the
+  // previous spot. On opening the page, a spot in the address is searched.
+  useEffect(() => {
+    const start = readUrlPoint();
+    if (start) goToPlace({ lat: start[0], lng: start[1] }, { history: "replace" });
+    const onPop = () => {
+      const point = readUrlPoint();
+      if (point) goToPlace({ lat: point[0], lng: point[1] }, { history: "none" });
+      else clearSpot();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "Use my location": only for people inside the city.
+  function locateMe() {
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocating(false);
+        const point = [position.coords.latitude, position.coords.longitude];
+        if (isInCityLimits(point)) goToPlace({ lat: point[0], lng: point[1] });
+        else setMessage({ kind: "warn", text: "You're outside NYC. Search an address or pick a spot on the map." });
+      },
+      (err) => {
+        setLocating(false);
+        setMessage({
+          kind: "warn",
+          text:
+            err.code === err.PERMISSION_DENIED
+              ? "Location is turned off for this site. Search an address instead."
+              : "Couldn't find your location. Search an address instead.",
+        });
+      },
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 }
+    );
   }
 
   return (
@@ -359,6 +420,8 @@ export default function App() {
         onGoToPlace={goToPlace}
         onRemovePlace={saved.removePlace}
         onPickAddress={goToPlace}
+        onUseLocation={locateMe}
+        locating={locating}
       />
       </ErrorBoundary>
       {account.enabled && (
@@ -389,6 +452,10 @@ export default function App() {
           selectedPoint={selectedPoint}
           area={result?.area}
           areaKey={result?.id}
+          // A pulsing ring at the spot until the shaded area is drawn.
+          pending={status === "loading" || Boolean(result?.areaPending)}
+          note={mapNote}
+          onNoteClose={(key) => setMapNote((n) => (n?.key === key ? null : n))}
           // Closed places leave the map; the panel still lists them.
           places={(result?.places ?? []).filter((p) => p.status !== "closed")}
           barriers={result?.barriers ?? []}
@@ -405,4 +472,20 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+// The spot in the page's address, as [lat, lng], or null.
+function readUrlPoint() {
+  const params = new URLSearchParams(window.location.search);
+  const lat = Number.parseFloat(params.get("lat"));
+  const lng = Number.parseFloat(params.get("lng"));
+  return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+}
+
+// Five decimals is about a meter: short links, and the same spot.
+function writeUrlPoint([lat, lng], how) {
+  if (how === "none") return;
+  const url = `${window.location.pathname}?lat=${lat.toFixed(5)}&lng=${lng.toFixed(5)}`;
+  if (how === "replace") window.history.replaceState(null, "", url);
+  else window.history.pushState(null, "", url);
 }

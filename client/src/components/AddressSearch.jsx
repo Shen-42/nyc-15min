@@ -24,6 +24,7 @@ export default function AddressSearch({ onPick }) {
   // Set when a suggestion is picked, so filling the box with its label
   // doesn't start another search.
   const picked = useRef(false);
+  const input = useRef(null);
   const id = useId();
   const listId = `${id}-list`;
 
@@ -90,7 +91,10 @@ export default function AddressSearch({ onPick }) {
       <label htmlFor={`${id}-input`} className="visually-hidden">
         Search an address in New York City
       </label>
+      {/* The box, with an ✕ to clear it: phones don't all show one. */}
+      <div className="search__field">
       <input
+        ref={input}
         id={`${id}-input`}
         className="field__input search__input"
         type="search"
@@ -111,6 +115,22 @@ export default function AddressSearch({ onPick }) {
         onBlur={() => setOpen(false)}
         onKeyDown={onKeyDown}
       />
+      {text && (
+        <button
+          type="button"
+          className="search__clear"
+          aria-label="Clear the search"
+          onClick={() => {
+            setText("");
+            setResults([]);
+            setOpen(false);
+            input.current?.focus();
+          }}
+        >
+          ✕
+        </button>
+      )}
+      </div>
       {showList && (
         <ul id={listId} role="listbox" className="search__list" aria-label="Addresses">
           {results.map((result, i) => (

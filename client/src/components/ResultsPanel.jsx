@@ -9,6 +9,8 @@ import { rankText } from "./BoroughPicker";
 import NeedsProfile from "./NeedsProfile";
 import TimeOfDay from "./TimeOfDay";
 import SavedPlaces from "../account/SavedPlaces";
+import Starters from "./Starters";
+import Dialog from "../account/Dialog";
 import SaveSpot from "../account/SaveSpot";
 import { formatHour } from "../data/time";
 
@@ -46,10 +48,15 @@ export default function ResultsPanel({
   onGoToPlace,
   onRemovePlace,
   onPickAddress,
+  onUseLocation,
+  locating,
 }) {
   const loading = status === "loading";
   const categoryById = Object.fromEntries((result?.score.categories ?? []).map((c) => [c.category, c]));
   const sheet = useSheet(sheetPosition, onSheetChange);
+  // "How is this scored?": a short explanation in a dialog, so it takes no
+  // room in the panel until asked for.
+  const [helpOpen, setHelpOpen] = useState(false);
   const open = sheetPosition === "open";
 
   return (
@@ -94,6 +101,8 @@ export default function ResultsPanel({
 
       {/* Choosing a spot without the map: by address (keyboard and screen readers). */}
       <AddressSearch onPick={onPickAddress} />
+      {/* Before the first search, right under the box: one tap to a result. */}
+      {!result && !loading && view === "walk" && <Starters onUseLocation={onUseLocation} locating={locating} />}
 
       {/* Every message goes here, in one style (card 14). */}
       <div className="messages">
@@ -120,11 +129,11 @@ export default function ResultsPanel({
 
 
       {/* Screen readers announce changes in this region (search started, finished, failed). */}
-      <div role="status" aria-live="polite">
+      <div role="status" aria-live="polite" className="panel__live">
         {!result && !loading && !message && (
           <p className="panel__intro">Pick a spot on the map to see what's within a 15-minute walk.</p>
         )}
-        {!result && loading && <p className="panel__intro">Finding what's nearby…</p>}
+        {!result && loading && <p className="visually-hidden">Finding what's nearby…</p>}
         {result && (
           <p className="visually-hidden">
             Score {result.score.score} out of 100. {verdict(result.score.score)}
@@ -133,6 +142,10 @@ export default function ResultsPanel({
         )}
       </div>
 
+      {/* The first search: grey stand-ins where the score and rows will be,
+          so it's clear something is on its way. */}
+      {!result && loading && <ScoreSkeleton />}
+
       {/* The score and the list are faded while a new search runs. The
           settings come after the list: the answer first, then what changes it. */}
       {result && (
@@ -140,6 +153,7 @@ export default function ResultsPanel({
           <div className="score-summary">
             <p className="score-summary__number" aria-hidden="true">
               {result.score.score}
+              <span className="score-summary__max">/100</span>
             </p>
             <p className="score-summary__verdict" aria-hidden="true">
               {verdict(result.score.score)}
@@ -148,7 +162,10 @@ export default function ResultsPanel({
             {result.score.rank != null && <p className="score-summary__rank">{rankText(result.score.rank)}</p>}
             <p className="score-summary__detail">
               {result.mode === "wheelchair" && "By wheelchair. "}
-              Nearest places: {result.score.proximity_minutes} min away on average.
+              Nearest places: {result.score.proximity_minutes} min away on average.{" "}
+              <button type="button" className="link-button" onClick={() => setHelpOpen(true)}>
+                How is this scored?
+              </button>
               {timeLabel && ` Counting places open at ${timeLabel}.`}
               {result.mode === "wheelchair" && result.barriers.length > 0 && (
                 <>
@@ -202,6 +219,22 @@ export default function ResultsPanel({
         {account.session && <SavedPlaces places={savedPlaces} onGo={onGoToPlace} onRemove={onRemovePlace} />}
       </div>
       </div>
+      <Dialog open={helpOpen} onClose={() => setHelpOpen(false)} title="How the score works">
+        <div className="dialog__body">
+          <p>
+            Each kind of place gets 0 to 100 from how close its nearest few are: full points within a 3-minute walk,
+            about half at 8 minutes, almost none at 15.
+          </p>
+          <p>
+            The score out of 100 averages the six, weighted by your needs. By default groceries count most, then the
+            subway.
+          </p>
+          <p>
+            &ldquo;Better than 72% of Manhattan&rdquo; compares this spot with every 100 m square of the borough where
+            people live, scored the same way.
+          </p>
+        </div>
+      </Dialog>
     </aside>
   );
 }
@@ -319,4 +352,27 @@ function useSheet(position, onChange) {
     // A CSS variable is the one inline style: the offset is measured, not designed.
     style: mobile ? { "--sheet-offset": `${dragOffset ?? restOffset}px` } : undefined,
   };
+}
+
+// Grey blocks shaped like the score and the six category rows, shown while
+// the first search runs. Hidden from screen readers, which hear "Finding
+// what's nearby…" instead.
+function ScoreSkeleton() {
+  return (
+    <div className="skeleton" aria-hidden="true">
+      <div className="skeleton__score">
+        <span className="skeleton__block skeleton__number" />
+        <span className="skeleton__lines">
+          <span className="skeleton__block skeleton__line" />
+          <span className="skeleton__block skeleton__line skeleton__line--short" />
+        </span>
+      </div>
+      {CATEGORIES.map((c) => (
+        <div key={c.id} className="skeleton__row">
+          <span className="skeleton__block skeleton__dot" />
+          <span className="skeleton__block skeleton__line" />
+        </div>
+      ))}
+    </div>
+  );
 }
