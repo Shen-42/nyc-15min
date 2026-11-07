@@ -117,9 +117,6 @@
   cursor: pointer;
 }
 
-.category-row:hover {
-  background: var(--color-surface-sunk);
-}
 
 .category-row[aria-pressed="true"] {
   background: var(--color-surface-sunk);
@@ -251,11 +248,16 @@
   padding-bottom: var(--space-4);
 }
 
+/* Padded on the sides and pulled out by the same amount, so the grey
+   under the mouse has room without moving the text. */
 .needs__summary {
   display: flex;
   align-items: center;
   gap: var(--space-1);
   min-height: var(--tap-target);
+  margin-inline: calc(-1 * var(--space-2));
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-sm);
   font-weight: 700;
   cursor: pointer;
 }
@@ -830,5 +832,51 @@
 
   .score-summary__rank {
     font-size: var(--text-sm);
+  }
+}
+
+/* ---- Under the mouse ----
+   Every button, menu, and row a click changes turns grey (or, if it's the
+   picked one, a lighter dark) while the mouse is over it, so it's clear what
+   a click will hit. Only for a mouse: on touch screens a hover state sticks
+   after a tap. */
+@media (hover: hover) {
+  .segmented__button,
+  .needs__preset,
+  .time__button,
+  .button,
+  .map-select,
+  .needs__select,
+  .needs__summary,
+  .needs__more-summary,
+  .category-row {
+    transition: background-color 120ms ease-out;
+  }
+
+  .segmented__button:hover,
+  .needs__preset:hover,
+  .time__button:hover,
+  .button:not(.button--primary, .button--danger, .button--link):hover,
+  .map-select:hover,
+  .needs__select:hover,
+  .needs__summary:hover,
+  .category-row:hover {
+    background-color: var(--color-hover);
+  }
+
+  .segmented__button[aria-pressed="true"]:hover,
+  .needs__preset[aria-pressed="true"]:hover,
+  .time__button[aria-pressed="true"]:hover,
+  .button--primary:not(:disabled):hover {
+    border-color: var(--color-ink-hover);
+    background-color: var(--color-ink-hover);
+  }
+
+  /* Text links ("Save spot", "Sign in", "Change", "Customize") get a
+     thicker underline instead of a grey box. */
+  .button--link:hover,
+  .needs__summary:hover .needs__change,
+  .needs__more-summary:hover {
+    text-decoration-thickness: 2px;
   }
 }

@@ -8,6 +8,10 @@
   --color-line: #d9dce3;
   --color-surface: #ffffff;
   --color-surface-sunk: #f3f4f7;
+  /* Under the mouse: a light grey for white controls, a lighter ink for
+     dark (picked) ones. Ink on the grey is still 12.9:1. */
+  --color-hover: #e4e6eb;
+  --color-ink-hover: #3a4150;
   --color-focus: #1f2430;
 
   /* Messages */
