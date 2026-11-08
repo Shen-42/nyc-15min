@@ -1,6 +1,6 @@
 {
-  "tag": "data-2026-11-07-13",
-  "built": "2026-11-07",
+  "tag": "data-2026-11-08-14",
+  "built": "2026-11-08",
   "files": {
     "walk_graph.npz": {
       "sha256": "7249d1d3b20ad6f32712a9e2684937bba71d650ed80beb41ad1310d01d8c524a",
@@ -15,36 +15,36 @@
       "bytes": 1039601
     },
     "water.json": {
-      "sha256": "b773332ba3c659183ac2ced583e5e989fd463da0f6a3c9012885c5d0a670fbd6",
-      "bytes": 432453
+      "sha256": "af38cbd62af311f38795754b1700ff6bbba6999f19ad698eed5c99a71c32987f",
+      "bytes": 572802
     },
     "waterways.json": {
-      "sha256": "18044aff897932c698b57e133024496740c631309b3ec58010d97459e6f751d5",
-      "bytes": 96576
+      "sha256": "de8198c95ab2805d41da66607ed6546419c106bb19d3f7b9e18abb853b2743d4",
+      "bytes": 96676
     },
     "ramps.json": {
       "sha256": "58c6f8f4845f59b7c22e44e3ceba0f85d45dd586565a17b13101e856ceb95250",
       "bytes": 7169260
     },
     "grid-bronx.json": {
-      "sha256": "d25354d59b86fb6cc3b609fc63b44ca1779f1d165e7ff33256b927ab7ed44902",
-      "bytes": 403242
+      "sha256": "9409213f9ed111679eaab8eed29b16a699fd2458b9d6686ff78d9d7860b3021d",
+      "bytes": 419432
     },
     "grid-brooklyn.json": {
-      "sha256": "7beef6b8f90e616e1bc18395474980334b9bc4f6ab06ec5ecf8c116b0470bfad",
-      "bytes": 594667
+      "sha256": "bf29754ebcfec3abb017720522a85039fbd01b47ef00e0ccc4dd57e6aa45c99d",
+      "bytes": 598744
     },
     "grid-manhattan.json": {
-      "sha256": "48b3b81ff75ecaa2d51b6f4c9f33af02b0b6137cff2c2e8b4ded1726b6a64a06",
-      "bytes": 237745
+      "sha256": "51180d57e15ca8f76afc60a145ab2dd7f82dad154ef5f40366806dce477e2247",
+      "bytes": 238163
     },
     "grid-queens.json": {
-      "sha256": "0bae6e5e3a97bdf7e77fc91db2e96077658bedb530439572593e2e87db7a1560",
-      "bytes": 960238
+      "sha256": "55f732d7c0ecf71ee24d0ef85fc4197a12223ba3a92a00a120cf26ed483a5be2",
+      "bytes": 965517
     },
     "grid-staten-island.json": {
-      "sha256": "1c39c9bfc33016320407bdaca4d07314d2e4c0d930d135e6d78bb615751a0420",
-      "bytes": 734487
+      "sha256": "c39244f522461ee3cad8c86805cb9ca32e3f733d22239fb53e0584970143cad0",
+      "bytes": 815940
     }
   }
 }
