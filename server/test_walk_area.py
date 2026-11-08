@@ -239,6 +239,24 @@ def test_nearest_name_finds_rivers_by_center_line_and_bays_by_label():
     assert names.find(Point(-73.95, 40.65)) is None  # inland Brooklyn, near neither
 
 
+def test_lines_are_wide_or_narrow_by_name():
+    """OpenStreetMap tags the East River a tidal channel and Mill Basin a river."""
+    from shapely.geometry import LineString
+    from walk_area import line_kind
+
+    assert [line_kind(n) for n in ("East River", "Arthur Kill", "Kill Van Kull", "Long Island Sound")] == ["river"] * 4
+    assert [line_kind(n) for n in ("Mill Basin", "Dutch Kills", "Newtown Creek", "Gowanus Canal")] == ["channel"] * 4
+
+    names = NearestName([
+        ("Mill Basin", LineString([(-73.917, 40.614), (-73.885, 40.615)]), "river"),
+        ("Jamaica Bay", Point(-73.8354, 40.6040), "label"),
+        ("East River", LineString([(-73.975, 40.700), (-73.965, 40.730)]), "channel"),
+        ("Wallabout Bay", Point(-73.9749, 40.7051), "label"),
+    ])
+    assert names.find(Point(-73.88, 40.62)) == "Jamaica Bay"  # off Canarsie, near Mill Basin's line
+    assert names.find(Point(-73.970, 40.713)) == "East River"  # off Williamsburg, 1 km from Wallabout Bay
+
+
 def test_water_names_dont_reach_across_land():
     """A Hudson click off Greenwich Village was called "Wallabout Bay", whose
     label is across Lower Manhattan. Small islands don't block a name."""

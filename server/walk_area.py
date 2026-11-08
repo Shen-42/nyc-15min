@@ -171,18 +171,31 @@ def load_water(path):
 THE_ENDINGS = ("River", "Canal", "Kill", "Ocean", "Channel")
 
 
+# Lines named for wide water. OpenStreetMap's tags don't say how wide: it
+# tags the East River a tidal channel and Mill Basin a river, so a click in
+# the middle of the East River was named for a bay label, and one in Jamaica
+# Bay for Mill Basin's line.
+WIDE_WATER_ENDINGS = ("River", "Kill", "Kull", "Sound")
+
+
+def line_kind(name):
+    """"river" for a line named for wide water, else "channel" (NearestName).
+    "Kill" alone is a strait (Arthur Kill); "Kills" is a creek (Dutch Kills)."""
+    return "river" if name.split()[-1] in WIDE_WATER_ENDINGS else "channel"
+
+
 class NearestName:
     """The named water nearest a click, for water with no outline to be
     inside (card 15): the big rivers have only a center line, the bays only a
     label point. Kinds are tried in order, each within its own reach, and the
     nearest of the first kind with any in reach wins:
 
-      river    a river's center line, within RIVER_DEGREES (about 1.3 km,
-               more than half the Hudson's width)
-      label    a bay's label point, within LABEL_DEGREES (about 4 km, across
-               most of Jamaica Bay)
-      channel  a canal or tidal channel's line, within CHANNEL_DEGREES (about
-               500 m)
+      river    the center line of wide water, within about 1.3 km (more
+               than half the Hudson's width): see line_kind
+      label    a bay's label point, within about 4 km (across most of
+               Jamaica Bay)
+      channel  the line of a creek, basin, canal, or channel, within about
+               500 m
 
     So a click in Jamaica Bay is "Jamaica Bay", not the marsh channel it
     happens to be nearest, while a click in a canal off the bays still gets
@@ -201,17 +214,17 @@ class NearestName:
     CROSSING_DEGREES = 0.0005
 
     def __init__(self, items, land=None):
-        """items: (name, shape, kind). A kind of None is worked out from the
-        shape, for files made before kinds were saved. land: the land a line
-        to a name mustn't cross, or None to skip that check."""
+        """items: (name, shape, kind). The kind of a line comes from its name
+        (line_kind), not the file. land: the land a line to a name mustn't
+        cross, or None to skip that check."""
         self.land = land
         if land is not None:
             shapely.prepare(land)
         self.names, self.shapes, self.kinds = [], [], []
-        for name, shape, kind in items:
+        for name, shape, _ in items:
             self.names.append(name)
             self.shapes.append(shape)
-            self.kinds.append(kind or ("label" if shape.geom_type in ("Point", "MultiPoint") else "river"))
+            self.kinds.append("label" if shape.geom_type in ("Point", "MultiPoint") else line_kind(name))
         self.tree = STRtree(self.shapes)
 
     def __len__(self):

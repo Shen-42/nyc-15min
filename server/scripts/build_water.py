@@ -4,9 +4,11 @@ Run once from the server folder, with the virtual environment active:
     python scripts/build_water.py
 
 It writes data/water.json. The server cuts these out of every walking area
-and turns away clicks that land on them. The rivers and bays are already
+and turns away clicks that land on them. The rivers and bays are mostly
 handled by trimming to the shoreline (geo/boroughs.json), so they're skipped
-there. The download is shared with build_amenities.py (scripts/osm_places.py).
+there, except creeks and canals the shoreline runs across rather than
+around, like Flushing Creek (see MOSTLY_ON_LAND). The download is shared
+with build_amenities.py (scripts/osm_places.py).
 
 It also writes data/waterways.json: the named rivers, canals, bays, and
 straits inside the city's limits, so a click in one can say which ("That's
@@ -29,7 +31,7 @@ from shapely.geometry import Polygon, mapping
 
 SERVER_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SERVER_DIR))
-from walk_area import load_land, polygons_only  # noqa: E402
+from walk_area import line_kind, load_land, polygons_only  # noqa: E402
 
 import osm_places  # noqa: E402  scripts/osm_places.py: the one download
 import overpass  # noqa: E402  scripts/overpass.py: server choice and retries
@@ -55,6 +57,13 @@ LINE_MARGIN_DEGREES = 0.01
 # Names misspelled in OpenStreetMap (fix them there too, when you can).
 NAME_FIXES = {"Big Channelv": "Big Channel"}
 
+# A river or canal outline is kept in water.json when at least this share
+# of it is inside the shoreline: a creek the shoreline crosses, like
+# Flushing Creek, which was otherwise walkable land. The Hudson and the East
+# River are almost all outside, and keeping their thin slivers along the
+# shore could cut off piers.
+MOSTLY_ON_LAND = 0.5
+
 # Ignore fountains and small decorative pools.
 MIN_AREA_M2 = 500
 # About 111 km per degree of latitude and 84 km per degree of longitude in New York.
@@ -74,15 +83,17 @@ def main():
     rings = json.loads(CITY_OUTLINE_FILE.read_text())["rings"]
     city = shapely.make_valid(shapely.union_all([Polygon([(lng, lat) for lat, lng in r]) for r in rings]))
 
-    water = []
+    water, crossed = [], []
     for _, row in features.iterrows():
         if not any(has_tag(row, key, value) for key, value in TAGS.items()):
             continue  # a park, school, or shop from the shared download
-        if text(row.get("water")) in SKIP_WATER_TYPES:
-            continue
         geom = polygons_only(row.geometry.intersection(land))
         if geom.is_empty or geom.area * M2_PER_SQ_DEGREE < MIN_AREA_M2:
             continue
+        if text(row.get("water")) in SKIP_WATER_TYPES:
+            if geom.area < MOSTLY_ON_LAND * row.geometry.area:
+                continue  # a river the shoreline already goes around
+            crossed.append(text(row.get("name")) or "an unnamed creek")
         water.append({
             "name": text(row.get("name")),
             "geometry": mapping(geom.simplify(0.00001)),  # about 1 m of detail
@@ -91,6 +102,7 @@ def main():
     OUTPUT_FILE.write_text(json.dumps(water, separators=(",", ":")))
     named = sorted({w["name"] for w in water if w["name"]})
     print(f"Saved {len(water)} bodies of water to {OUTPUT_FILE}")
+    print(f"Creeks and canals inside the shoreline: {', '.join(sorted(crossed)) or 'none'}")
     print("Named:", ", ".join(named))
 
     print("\nDownloading the names of the rivers and bays...")
@@ -116,7 +128,7 @@ def main():
         elif shape_type in ("LineString", "MultiLineString"):
             waterway = text(row.get("waterway"))
             keep = waterway in LINE_TYPES
-            kind, clipped = ("river" if waterway == "river" else "channel"), geom.intersection(near_city)
+            kind, clipped = line_kind(name), geom.intersection(near_city)
         else:  # a point
             keep = has_tag(row, "natural", BAY_TYPES)
             kind, clipped = "label", geom.intersection(city)

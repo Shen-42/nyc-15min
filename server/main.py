@@ -399,7 +399,7 @@ def plan_walk(request, kind, lat, lng, minutes, timer, mode="walk"):
     in_water, name = water.find(clicked)
     if in_water:
         raise HTTPException(
-            status_code=422, detail=f"That's in {name or 'the water'}. Pick a spot on land.", headers=SUGGEST_STREET
+            status_code=422, detail=f"That's in {water_phrase(name, lat, lng) if name else 'the water'}. Pick a spot on land.", headers=SUGGEST_STREET
         )
     # Rivers, bays, and the ocean: off the shoreline but inside the city's
     # limits, which run through the water. The site sends these clicks so
