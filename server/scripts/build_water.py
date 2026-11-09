@@ -7,8 +7,14 @@ It writes data/water.json. The server cuts these out of every walking area
 and turns away clicks that land on them. The rivers and bays are mostly
 handled by trimming to the shoreline (geo/boroughs.json), so they're skipped
 there, except creeks and canals the shoreline runs across rather than
-around, like Flushing Creek (see MOSTLY_ON_LAND). The download is shared
-with build_amenities.py (scripts/osm_places.py).
+around (see MOSTLY_ON_LAND). The download is shared with build_amenities.py
+(scripts/osm_places.py).
+
+Some creeks the shoreline runs across have no outline in OpenStreetMap at
+all, like Flushing Creek: they're part of the sea, bounded by the
+coastline. A third download, of the coastline, finds those (scripts/coast.py),
+and they're added to water.json under the name of the creek line running
+through them.
 
 It also writes data/waterways.json: the named rivers, canals, bays, and
 straits inside the city's limits, so a click in one can say which ("That's
@@ -33,6 +39,7 @@ SERVER_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SERVER_DIR))
 from walk_area import line_kind, load_land, polygons_only  # noqa: E402
 
+import coast  # noqa: E402  scripts/coast.py: creeks the shoreline counts as land
 import osm_places  # noqa: E402  scripts/osm_places.py: the one download
 import overpass  # noqa: E402  scripts/overpass.py: server choice and retries
 from osm_places import has_tag, text  # noqa: E402
@@ -99,12 +106,6 @@ def main():
             "geometry": mapping(geom.simplify(0.00001)),  # about 1 m of detail
         })
 
-    OUTPUT_FILE.write_text(json.dumps(water, separators=(",", ":")))
-    named = sorted({w["name"] for w in water if w["name"]})
-    print(f"Saved {len(water)} bodies of water to {OUTPUT_FILE}")
-    print(f"Creeks and canals inside the shoreline: {', '.join(sorted(crossed)) or 'none'}")
-    print("Named:", ", ".join(named))
-
     print("\nDownloading the names of the rivers and bays...")
     named = overpass.download("rivers and bays", lambda: ox.features_from_polygon(city.simplify(0.001), tags=WATERWAY_TAGS))
     # Something on the line between two download pieces comes back from both.
@@ -142,6 +143,31 @@ def main():
     print(f"\nSaved {len(waterways)} rivers, bays, and straits to {WATERWAYS_FILE} ({size_kb:.0f} KB): "
           + ", ".join(f"{n} {k}" for k, n in kinds.items()))
     print("Named:", ", ".join(sorted({w["name"] for w in waterways})))
+
+    print("\nDownloading the coastline...")
+    area = coast.frame(city)
+    coastline = overpass.download("coastline", lambda: ox.features_from_polygon(area, tags={"natural": "coastline"}))
+    coastline = coastline[~coastline.index.duplicated()]
+    # A closed coastline (an island) may come back as an area: use its edge.
+    coast_lines = [g.boundary if g.geom_type in ("Polygon", "MultiPolygon") else g for g in coastline.geometry if g is not None]
+    named_lines = [(text(r.get("name")), r.geometry) for _, r in named.iterrows()
+                   if text(r.get("name")) and r.geometry is not None
+                   and r.geometry.geom_type in ("LineString", "MultiLineString")
+                   and text(r.get("waterway")) in LINE_TYPES and text(r.get("tunnel")) in (None, "no")]
+    named_lines = [(NAME_FIXES.get(n, n), g) for n, g in named_lines]
+    creeks = coast.creeks_on_land(coast_lines, land, city, named_lines, MIN_AREA_M2 / M2_PER_SQ_DEGREE)
+    for name, piece in creeks:
+        water.append({"name": name, "geometry": mapping(piece.simplify(0.00001))})
+    sizes = Counter()
+    for name, piece in creeks:
+        sizes[name] += piece.area * M2_PER_SQ_DEGREE
+    print(f"Read {len(coast_lines)} coastline lines. Creeks the shoreline counts as land: "
+          + (", ".join(f"{n} ({m / 1e4:.1f} ha)" for n, m in sorted(sizes.items())) or "none"))
+
+    OUTPUT_FILE.write_text(json.dumps(water, separators=(",", ":")))
+    print(f"\nSaved {len(water)} bodies of water to {OUTPUT_FILE}")
+    print(f"Creeks and canals inside the shoreline: {', '.join(sorted(crossed)) or 'none'}")
+    print("Named:", ", ".join(sorted({w["name"] for w in water if w["name"]})))
 
 
 if __name__ == "__main__":
