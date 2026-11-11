@@ -78,13 +78,19 @@ jobs:
         if: env.SCOPE == 'everything'
         run: python scripts/build_graph.py
 
+      # The step limits leave time before the job's 330 minutes run out, so
+      # "Save this run's downloads" still runs if the servers are slow, and
+      # "Re-run failed jobs" starts from what was saved. On Nov 9 the job
+      # ran out of time mid-download and the downloads were lost.
       - name: Download lakes and ponds
         if: env.SCOPE != 'grid only'
+        timeout-minutes: 240
         run: python scripts/build_water.py
 
       # Same download as the lakes (scripts/osm_places.py), so mostly from the cache.
       - name: Download places
         if: env.SCOPE != 'grid only'
+        timeout-minutes: 60
         run: python scripts/build_amenities.py
 
       - name: Save this run's downloads

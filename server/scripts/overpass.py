@@ -35,6 +35,8 @@ RETRIES = 20
 # OSMnx's default is 2,500 km², which puts a whole borough in one request.
 # Requests that big time out on busy servers; 50 km² ones finish.
 MAX_PIECE_M2 = 50_000_000
+# For downloads with small answers: about 4 pieces for the whole city.
+LIGHT_PIECE_M2 = 500_000_000
 
 # The boroughs as OpenStreetMap knows them, water included, so the bridges
 # between them are inside the area and come with the walking graph.
@@ -96,8 +98,20 @@ def servers():
     return [chosen] if chosen else SERVERS
 
 
-def download(label, fetch):
-    """Run fetch() (an OSMnx download), retrying with growing waits if the server fails."""
+def download(label, fetch, piece_m2=None):
+    """Run fetch() (an OSMnx download), retrying with growing waits if the server fails.
+
+    piece_m2: split the area into pieces of at most this size instead of
+    MAX_PIECE_M2. Small answers (the coastline, river names) can come in a
+    few big pieces: on Nov 9 the coastline took over an hour in 50 km²
+    pieces, most of it waiting out "busy" answers between pieces."""
+    if piece_m2:
+        before = ox.settings.max_query_area_size
+        ox.settings.max_query_area_size = piece_m2
+        try:
+            return download(label, fetch)
+        finally:
+            ox.settings.max_query_area_size = before
     choices = servers()
     for attempt in range(RETRIES):
         ox.settings.overpass_url = choices[attempt % len(choices)]

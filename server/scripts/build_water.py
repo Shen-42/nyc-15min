@@ -107,7 +107,8 @@ def main():
         })
 
     print("\nDownloading the names of the rivers and bays...")
-    named = overpass.download("rivers and bays", lambda: ox.features_from_polygon(city.simplify(0.001), tags=WATERWAY_TAGS))
+    named = overpass.download("rivers and bays", lambda: ox.features_from_polygon(city.simplify(0.001), tags=WATERWAY_TAGS),
+                              piece_m2=overpass.LIGHT_PIECE_M2)
     # Something on the line between two download pieces comes back from both.
     named = named[~named.index.duplicated()]
     near_city = city.buffer(LINE_MARGIN_DEGREES)
@@ -146,7 +147,8 @@ def main():
 
     print("\nDownloading the coastline...")
     area = coast.frame(city)
-    coastline = overpass.download("coastline", lambda: ox.features_from_polygon(area, tags={"natural": "coastline"}))
+    coastline = overpass.download("coastline", lambda: ox.features_from_polygon(area, tags={"natural": "coastline"}),
+                                  piece_m2=overpass.LIGHT_PIECE_M2)
     coastline = coastline[~coastline.index.duplicated()]
     # A closed coastline (an island) may come back as an area: use its edge.
     coast_lines = [g.boundary if g.geom_type in ("Polygon", "MultiPolygon") else g for g in coastline.geometry if g is not None]
