@@ -310,3 +310,18 @@ def test_a_click_in_a_park_suggests_the_nearest_street_outside_it():
         rikers = c.get("/api/places", params={"lat": 40.7934, "lng": -73.8845})
         assert "X-Suggest" not in rikers.headers  # its nearest street is on the island
     rate_limiter.counter.clear()
+
+
+def test_nearest_routes_are_rate_limited():
+    """Security audit: these weren't limited, and /api/nearest-street can
+    check up to 2,000 street points a request."""
+    from main import SEARCHES_PER_MINUTE, rate_limiter
+
+    times_square = {"lat": 40.758, "lng": -73.9855}
+    for route in ("/api/nearest-street", "/api/nearest-node"):
+        rate_limiter.counter.clear()
+        for _ in range(SEARCHES_PER_MINUTE):
+            assert client.get(route, params=times_square).status_code != 429
+        res = client.get(route, params=times_square)
+        assert res.status_code == 429 and "Retry-After" in res.headers
+    rate_limiter.counter.clear()

@@ -42,6 +42,7 @@ store = None
 admin_ids = set()
 usage = None
 rate_check = None  # main.check_rate_limit
+ip_of = None  # main.client_ip
 github = {"token": None, "repo": "Shen-42/nyc-15min", "workflow": "refresh-data.yml"}
 
 # The same box the search routes accept (main.py): the five boroughs since
@@ -51,10 +52,11 @@ LAT_RANGE = (40.47, 40.93)
 LNG_RANGE = (-74.27, -73.68)
 
 
-def setup(usage_counter, rate_limit):
-    global auth, store, admin_ids, usage, rate_check
+def setup(usage_counter, rate_limit, client_ip):
+    global auth, store, admin_ids, usage, rate_check, ip_of
     usage = usage_counter
     rate_check = rate_limit
+    ip_of = client_ip
     admin_ids = {i.strip() for i in os.environ.get("ADMIN_USER_IDS", "").split(",") if i.strip()}
     github["token"] = os.environ.get("GH_REFRESH_TOKEN") or None
     github["repo"] = os.environ.get("GH_REPO", github["repo"])
@@ -75,6 +77,10 @@ def current_user(request: Request):
     """The signed-in user, from the Authorization header. 401 if missing or invalid."""
     if auth is None or store is None:
         raise HTTPException(status_code=503, detail="Accounts aren't set up on this server.")
+    # Counted by address before the token is checked, so made-up tokens are
+    # limited too (checking one can mean a call to Supabase).
+    if rate_check:
+        rate_check(f"{ip_of(request)}:account")
     header = request.headers.get("authorization", "")
     if not header.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Sign in to continue.", headers={"WWW-Authenticate": "Bearer"})

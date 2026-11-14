@@ -152,7 +152,7 @@ async def lifespan(app):
         shared_cache = make_shared_cache(redis_client, version)
     else:
         print(f"No walking graph at {GRAPH_FILE}. Run: python scripts/build_graph.py")
-    accounts.setup(usage, check_rate_limit)
+    accounts.setup(usage, check_rate_limit, client_ip)
     # Render's free plan stops the API if it goes over 512 MB.
     print(f"Memory used while starting: {peak_memory_mb():.0f} MB at most (Render's free plan has 512 MB)")
     yield
@@ -288,10 +288,12 @@ def graph_info():
 
 @app.get("/api/nearest-node")
 def nearest_node(
+    request: Request,
     lat: float = Query(..., ge=40.47, le=40.93),
     lng: float = Query(..., ge=-74.27, le=-73.68),
 ):
     """The graph node closest to a clicked point. Card 4 starts its search here."""
+    check_rate_limit(f"{client_ip(request)}:nearest")
     graph = require_graph()
     node_id, dist = graph.nearest_node(lat, lng)
     node_lat, node_lng = graph.coords[node_id]
@@ -309,12 +311,14 @@ NEARBY_CANDIDATES = 2000
 
 @app.get("/api/nearest-street")
 def nearest_street(
+    request: Request,
     lat: float = Query(..., ge=40.47, le=40.93),
     lng: float = Query(..., ge=-74.27, le=-73.68),
 ):
     """The nearest point on a street a search would accept: on land, and not
     in a park, a lake, or on an island where nobody lives. For the site's
     "Use the nearest street" after a click is turned away."""
+    check_rate_limit(f"{client_ip(request)}:nearest")
     graph = require_graph()
     for node_id, node_lat, node_lng, dist in graph.nearby_nodes(lat, lng, NEARBY_CANDIDATES):
         spot = Point(node_lng, node_lat)

@@ -216,3 +216,16 @@ def test_admin_refresh_starts_the_workflow(client, monkeypatch):
     res = client.post("/api/admin/refresh", headers=signed_in(ADMIN))
     assert res.status_code == 200 and res.json()["started"]
     assert calls == ["https://api.github.com/repos/Shen-42/nyc-15min/actions/workflows/refresh-data.yml/dispatches"]
+
+
+def test_made_up_tokens_are_rate_limited_by_address(client, monkeypatch):
+    """Security audit: only signed-in users were counted, so made-up tokens
+    could be sent without limit."""
+    monkeypatch.setattr(accounts, "rate_check", main.check_rate_limit)
+    monkeypatch.setattr(accounts, "ip_of", main.client_ip)
+    main.rate_limiter.counter.clear()
+    garbage = {"Authorization": "Bearer not-a-jwt"}
+    for _ in range(main.SEARCHES_PER_MINUTE):
+        assert client.get("/api/me", headers=garbage).status_code == 401
+    assert client.get("/api/me", headers=garbage).status_code == 429
+    main.rate_limiter.counter.clear()
