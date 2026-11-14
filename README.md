@@ -71,7 +71,7 @@ React, Vite, Leaflet, and MapLibre on the front; Python, FastAPI, NumPy, scipy, 
 
 ## Data and credits
 
-- Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
+- Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, available under the [Open Database License](https://opendatacommons.org/licenses/odbl/). The data files in this repo's releases are built from it and are under the same license.
 - Opening hours parsed with [opening-hours-py](https://pypi.org/project/opening-hours-py/) by Rémi Dupré.
 - Curb ramps from NYC DOT's Pedestrian Ramp Locations on [NYC Open Data](https://data.cityofnewyork.us/d/ufzp-rrqu).
 - Wheelchair speed: Cooper et al. (2011) and Tolerico et al. (2007), via the [SCIRE Project](https://scireproject.com/evidence/wheeled-mobility-and-seating-equipment/manual-wheelchairs/wheelchair-use/wheelchair-usage/).

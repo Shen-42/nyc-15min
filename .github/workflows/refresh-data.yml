@@ -132,7 +132,7 @@ jobs:
 
           gh release create "$TAG" $FILES \
             --title "Map data $(date -u +%Y-%m-%d)" \
-            --notes "Built by run ${{ github.run_number }} of the Refresh map data workflow. Download with server/scripts/get_data.py."
+            --notes "Built by run ${{ github.run_number }} of the Refresh map data workflow. Download with server/scripts/get_data.py. Contains data © OpenStreetMap contributors, available under the Open Database License (ODbL): https://www.openstreetmap.org/copyright"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
