@@ -33,6 +33,11 @@ export default function About({ open, onClose }) {
             Source code and how it works, on GitHub
           </a>
         </p>
+        <p>
+          <a href="/privacy.html" target="_blank" rel="noreferrer">
+            Privacy and terms
+          </a>
+        </p>
       </div>
     </Dialog>
   );

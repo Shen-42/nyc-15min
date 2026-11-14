@@ -163,6 +163,16 @@ export default function AuthDialog({ open, onClose, reason, recovering, onRecove
             />
           )}
 
+          {mode === "signUp" && (
+            <p className="field__hint">
+              You must be 13 or older to create an account. See what we keep in{" "}
+              <a href="/privacy.html" target="_blank" rel="noreferrer">
+                Privacy and terms
+              </a>
+              .
+            </p>
+          )}
+
           <button type="submit" className="button button--primary" disabled={busy}>
             {busy ? "Please wait…" : { signIn: "Sign in", signUp: "Create account", forgot: "Send reset link", newPassword: "Save password" }[mode]}
           </button>

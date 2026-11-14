@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy and terms · NYC 15-Minute City Explorer</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- A plain page so it can be linked from anywhere (About, sign-up).
+         Keep it in step with what the code actually collects. -->
+    <style>
+      body {
+        margin: 0;
+        padding: 24px 16px 48px;
+        background: #ffffff;
+        color: #1f2430;
+        font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      main { max-width: 680px; margin: 0 auto; }
+      h1 { font-size: 1.6rem; margin: 0 0 4px; }
+      h2 { font-size: 1.15rem; margin: 28px 0 6px; }
+      p, ul { margin: 0 0 10px; }
+      li { margin-bottom: 4px; }
+      .muted { color: #5a6172; }
+      a { color: #0067a5; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p><a href="/">← Back to the map</a></p>
+      <h1>Privacy and terms</h1>
+      <p class="muted">Last updated November 15, 2026.</p>
+
+      <p>
+        The NYC 15-Minute City Explorer is a free map that shows what you can walk to from a spot in New York. You can
+        use it without an account. It has no ads and no analytics, and we don't sell or share your data.
+      </p>
+
+      <h2>When you search</h2>
+      <ul>
+        <li>
+          The spot you pick (a click, an address, or "Use my location") is sent to our server to work out the walk. The
+          server's request log, kept by our host Render for a limited time, records the spot's coordinates.
+        </li>
+        <li>
+          "Use my location" asks your browser for your location only when you press it, rounds it to about 10 meters,
+          and uses it as the search spot. It isn't stored on our server.
+        </li>
+        <li>
+          The spot goes into the page's address (<code>?lat=…&amp;lng=…</code>), so a link you share shows that spot.
+          Think twice before sharing a link to your home.
+        </li>
+        <li>
+          To stop scripts from overloading the server, your IP address is counted for about a minute. We also keep
+          daily totals of requests per page, with nothing about who made them.
+        </li>
+      </ul>
+
+      <h2>Other services your browser talks to</h2>
+      <ul>
+        <li><strong>Stadia Maps</strong> draws the base map. It sees your IP address and the part of the map you're looking at.</li>
+        <li><strong>NYC Planning's GeoSearch</strong> suggests addresses. It sees your IP address and what you type in the address box.</li>
+        <li><strong>Supabase</strong> handles sign-in. It sees your email, IP address, and sign-in times.</li>
+        <li><strong>Render and Cloudflare</strong> host the site and see your IP address, like any web host.</li>
+      </ul>
+
+      <h2>If you create an account</h2>
+      <ul>
+        <li>Your email address and password. Supabase stores the password only in a scrambled (hashed) form.</li>
+        <li>Your saved places: the name you give each one and its location, up to 50.</li>
+        <li>Your needs: how much each kind of place matters to you, and whether you search walking or in a wheelchair.</li>
+      </ul>
+      <p>
+        We use these only to show them back to you. The only emails we send are the ones to confirm your address and
+        reset your password.
+      </p>
+      <p>You must be 13 or older to create an account.</p>
+
+      <h2>Kept in your browser</h2>
+      <p>
+        Your last five spots, your needs, your walk or wheelchair choice, and, when you're signed in, a sign-in token.
+        These stay on your device. The site sets no cookies of its own. Clear this site's data in your browser to
+        remove them.
+      </p>
+
+      <h2>Deleting your account</h2>
+      <p>
+        Account &gt; Delete account removes your saved places, your needs, and your sign-in (email and password) right
+        away, and signs you out. It doesn't clear what's kept in your browser (see above), and copies in Render's and
+        Supabase's logs and backups are deleted on their own schedules.
+      </p>
+
+      <h2>Terms</h2>
+      <ul>
+        <li>
+          The map is provided as is, free of charge. Scores and walking areas are estimates from open data, which can be
+          missing or out of date. Check before you rely on them.
+        </li>
+        <li>Don't use automated tools to overload the site or its API.</li>
+        <li>
+          Map data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>, available under
+          the Open Database License. Map tiles © Stadia Maps and © OpenMapTiles.
+        </li>
+        <li>We may update this page; the date at the top shows when it last changed.</li>
+      </ul>
+
+      <h2>Questions</h2>
+      <p>
+        Email <a href="mailto:kevin734626@gmail.com">kevin734626@gmail.com</a> about your data, or to have it deleted if
+        you can't sign in.
+      </p>
+    </main>
+  </body>
+</html>
