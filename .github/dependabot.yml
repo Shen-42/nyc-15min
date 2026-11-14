@@ -4,12 +4,17 @@
 # merge themselves once the tests pass (tests.yml). Each major update gets
 # its own PR and waits for a person, since a breaking change can pass the
 # tests and still break the site.
+# cooldown: a new version is only offered once it's 7 days old, so a
+# hijacked release is usually caught and pulled before it can merge itself
+# (security updates don't wait).
 version: 2
 updates:
   - package-ecosystem: pip
     directory: /server
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       python-minor-and-patch:
         update-types: ["minor", "patch"]
@@ -17,6 +22,8 @@ updates:
     directory: /client
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       # Vite and its plugins must move together (plugin-react 6 needs Vite 8),
       # so they share one PR whatever the size of the update. A group listed
@@ -29,6 +36,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       actions-minor-and-patch:
         update-types: ["minor", "patch"]
