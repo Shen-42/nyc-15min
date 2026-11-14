@@ -373,7 +373,9 @@ export default function App() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setLocating(false);
-        const point = [position.coords.latitude, position.coords.longitude];
+        // Rounded to 4 decimals (about 10 m), so a shared link or the
+        // server's log doesn't hold someone's exact location.
+        const point = [position.coords.latitude, position.coords.longitude].map((x) => Math.round(x * 1e4) / 1e4);
         if (isInCityLimits(point)) goToPlace({ lat: point[0], lng: point[1] });
         else setMessage({ kind: "warn", text: "You're outside NYC. Search an address or pick a spot on the map." });
       },
