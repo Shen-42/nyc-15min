@@ -1,0 +1,46 @@
+# This repo is private. Its README and docs/ are copied to the public
+# Shen-42/nyc-15min-info repo whenever they change on main, so the
+# project's description stays public while the code doesn't.
+# Needs the PUBLIC_REPO_TOKEN secret (see refresh-data.yml).
+name: Sync public README
+
+on:
+  push:
+    branches: [main]
+    paths: [README.md, docs/**]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: private
+          persist-credentials: false
+
+      - uses: actions/checkout@v7
+        with:
+          repository: Shen-42/nyc-15min-info
+          token: ${{ secrets.PUBLIC_REPO_TOKEN }}
+          path: public
+
+      - name: Copy and push
+        run: |
+          cp private/README.md public/README.md
+          rm -rf public/docs && cp -R private/docs public/docs
+          cd public
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Already in sync." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Sync README and docs from the private repo (${GITHUB_SHA::7})"
+          git push
+          echo "Pushed README and docs to Shen-42/nyc-15min-info." >> "$GITHUB_STEP_SUMMARY"

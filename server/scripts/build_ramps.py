@@ -55,7 +55,7 @@ def to_meters(lat, lng):
 
 def get_json(url, tries=5):
     """GET a JSON URL, waiting longer after each failure (5, 10, 20, 40 s)."""
-    request = urllib.request.Request(url, headers={"User-Agent": "nyc-15min (github.com/Shen-42/nyc-15min)"})
+    request = urllib.request.Request(url, headers={"User-Agent": "nyc-15min (github.com/Shen-42/nyc-15min-info)"})
     for attempt in range(tries):
         try:
             with urllib.request.urlopen(request, timeout=120) as response:

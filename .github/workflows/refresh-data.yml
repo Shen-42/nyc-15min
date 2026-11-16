@@ -1,7 +1,8 @@
 # Monthly data refresh (cards 8 and 15).
 # Re-downloads the five boroughs' streets, lakes, places, and curb ramps,
 # checks that nothing shrank suspiciously, and runs the tests. Then it
-# uploads the data to a GitHub release and commits server/data-release.json,
+# uploads the data to a GitHub release in the public Shen-42/nyc-15min-info
+# repo and commits server/data-release.json,
 # which names that release. The commit makes Render redeploy the API, and
 # its build downloads the new data (server/scripts/get_data.py).
 # Run it by hand from the repo's Actions tab: "Refresh map data" > "Run workflow".
@@ -24,7 +25,7 @@ on:
         default: everything
 
 permissions:
-  contents: write # to create the release and commit data-release.json
+  contents: write # to commit data-release.json
 
 jobs:
   refresh:
@@ -43,7 +44,10 @@ jobs:
       OVERPASS_URLS: ${{ secrets.OVERPASS_URLS }}
       # The monthly run has no inputs, so it rebuilds everything.
       SCOPE: ${{ inputs.scope || 'everything' }}
-      GH_TOKEN: ${{ github.token }}
+      # Fine-grained token with Contents read/write on Shen-42/nyc-15min-info
+      # only, for its releases. This repo is private; the data is public there.
+      GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+      DATA_REPO: Shen-42/nyc-15min-info
     steps:
       - uses: actions/checkout@v7
 
@@ -130,7 +134,7 @@ jobs:
             exit 0
           fi
 
-          gh release create "$TAG" $FILES \
+          gh release create "$TAG" $FILES --repo "$DATA_REPO" \
             --title "Map data $(date -u +%Y-%m-%d)" \
             --notes "Built by run ${{ github.run_number }} of the Refresh map data workflow. Download with server/scripts/get_data.py. Contains data © OpenStreetMap contributors, available under the Open Database License (ODbL): https://www.openstreetmap.org/copyright"
 
@@ -150,6 +154,6 @@ jobs:
       # matter for going back, and git history still says what they were.
       - name: Delete old data releases
         run: |
-          gh release list --limit 100 --json tagName --jq '.[].tagName' \
+          gh release list --repo "$DATA_REPO" --limit 100 --json tagName --jq '.[].tagName' \
             | grep '^data-' | tail -n +4 \
-            | xargs -r -n 1 gh release delete --cleanup-tag --yes
+            | xargs -r -n 1 gh release delete --repo "$DATA_REPO" --cleanup-tag --yes

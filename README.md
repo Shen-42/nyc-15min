@@ -1,7 +1,5 @@
 # NYC 15-Minute City Explorer
 
-[![Tests](https://github.com/Shen-42/nyc-15min/actions/workflows/tests.yml/badge.svg)](https://github.com/Shen-42/nyc-15min/actions/workflows/tests.yml)
-[![Refresh map data](https://github.com/Shen-42/nyc-15min/actions/workflows/refresh-data.yml/badge.svg)](https://github.com/Shen-42/nyc-15min/actions/workflows/refresh-data.yml)
 [![Live site](https://img.shields.io/badge/live-nyc15min.com-2ea44f)](https://www.nyc15min.com)
 
 **Could you get through your week in New York on foot?** Click any spot in the five boroughs and see everywhere you can walk in 15 minutes, the groceries, pharmacies, doctors, parks, schools, and subway stations inside that walk, and a 0–100 score for how much of daily life is close by.
@@ -27,7 +25,7 @@ This project puts that test in anyone's hands. Residents, students, and research
 
 ## How it works
 
-The five boroughs' streets and paths from OpenStreetMap become a graph of 344,000 points, kept as NumPy arrays. When you click, the server runs Dijkstra's algorithm (scipy's) outward at walking speed until it hits 15 minutes, draws the area it reached, and scores the places inside it. A search takes about a millisecond. The data refreshes itself every month and is published as a [GitHub release](https://github.com/Shen-42/nyc-15min/releases).
+The five boroughs' streets and paths from OpenStreetMap become a graph of 344,000 points, kept as NumPy arrays. When you click, the server runs Dijkstra's algorithm (scipy's) outward at walking speed until it hits 15 minutes, draws the area it reached, and scores the places inside it. A search takes about a millisecond. The data refreshes itself every month and is published as a [GitHub release](https://github.com/Shen-42/nyc-15min-info/releases).
 
 The full story, with the scoring formula and its sources, is in [How it works](docs/how-it-works.md).
 
@@ -61,9 +59,7 @@ Open http://localhost:5173. For the map key, accounts, tests, and deploying, see
 | Development (setup, tests, data, deploy) | [docs/development.md](docs/development.md) |
 | API reference | [docs/api.md](docs/api.md) |
 | Security | [docs/security.md](docs/security.md) |
-| Test runs | [GitHub Actions: Tests](https://github.com/Shen-42/nyc-15min/actions/workflows/tests.yml) |
-| Data refresh runs | [GitHub Actions: Refresh map data](https://github.com/Shen-42/nyc-15min/actions/workflows/refresh-data.yml) |
-| Map data | [GitHub releases](https://github.com/Shen-42/nyc-15min/releases) (`data-...`) |
+| Map data | [GitHub releases](https://github.com/Shen-42/nyc-15min-info/releases) (`data-...`) |
 
 ## Built with
 
