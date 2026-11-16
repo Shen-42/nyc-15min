@@ -30,7 +30,7 @@ export default function About({ open, onClose }) {
         </p>
         <p>
           <a href="https://github.com/Shen-42/nyc-15min-info" target="_blank" rel="noreferrer">
-            How it works, on GitHub
+            How it works
           </a>
         </p>
         <p>
