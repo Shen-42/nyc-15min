@@ -29,26 +29,6 @@ The five boroughs' streets and paths from OpenStreetMap become a graph of 344,00
 
 The full story, with the scoring formula and its sources, is in [How it works](docs/how-it-works.md).
 
-## Run it locally
-
-You need Node.js 20.19+ and Python 3.11+.
-
-```bash
-# Terminal 1: the API
-cd server
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python scripts/get_data.py   # the map data, about 50 MB
-uvicorn main:app --reload --port 8000
-
-# Terminal 2: the site
-cd client
-npm install
-npm run dev
-```
-
-Open http://localhost:5173. For the map key, accounts, tests, and deploying, see [Development](docs/development.md).
-
 ## Links
 
 | | |
