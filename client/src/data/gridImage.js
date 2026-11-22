@@ -26,7 +26,7 @@ const MAX_PIXELS = 2_500_000;
 // cells (500 m) reaches the middle of Central Park, 800 m across.
 const FILL_SIGMA = 5;
 
-// Leaflet stretches an image evenly in Web Mercator, not in latitude, so
+// The map stretches an image evenly in Web Mercator, not in latitude, so
 // image rows are placed by Mercator y.
 const mercY = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
 const latFromMercY = (y) => ((2 * Math.atan(Math.exp(y)) - Math.PI / 2) * 180) / Math.PI;

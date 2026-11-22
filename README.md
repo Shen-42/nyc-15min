@@ -43,7 +43,7 @@ The full story, with the scoring formula and its sources, is in [How it works](d
 
 ## Built with
 
-React, Vite, Leaflet, and MapLibre on the front; Python, FastAPI, NumPy, scipy, and Shapely behind it; Supabase for accounts; hosted on Render.
+React, Vite, and MapLibre on the front; Python, FastAPI, NumPy, scipy, and Shapely behind it; Supabase for accounts; hosted on Render.
 
 ## Data and credits
 

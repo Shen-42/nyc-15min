@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useMap, useMapEvents } from "react-leaflet";
-import L from "leaflet";
+import { useMap } from "./MapMarker";
 import { gridImage } from "../data/gridImage";
 import { LAND_POLYGONS } from "../data/city";
 
@@ -26,55 +25,77 @@ const covers = (outer, inner) =>
 
 // The score map or gap finder (cards 12 and 15), drawn as one smooth image
 // built from the city grid (see data/gridImage.js) for the area around the
-// view. It sits in its own pane, above the map tiles and below the walk area
-// and markers.
+// view. It goes above the base map and below the grey mask (CityMap.jsx).
 //
 // Drawing takes a moment, so it happens as rarely as possible: the image
 // covers twice the view, and it's only drawn again when the map moves past
 // it or zooms in two levels or more (when it would start to look soft).
-// During a zoom Leaflet stretches the image that's there, so there's never
+// During a zoom the map stretches the image that's there, so there's never
 // an empty map while the new one is drawn.
 export default function GridLayer({ cells, meta, blank, fill, valueFor, colorFor, sigma, opacity = 0.8 }) {
   const map = useMap();
   // The area and zoom of the image on the map, or null before the first one.
   const [drawn, setDrawn] = useState(null);
+  // The id of the image's source and layer on the map, and a count for the next one.
   const shown = useRef(null);
+  const count = useRef(0);
 
   // moveend also follows every zoom. A new image is needed only if the
   // view has left the one on the map, or zoomed well into it.
-  useMapEvents({
-    moveend: () => {
+  useEffect(() => {
+    const onMoveEnd = () => {
       const view = viewOf(map);
       setDrawn((current) =>
         current && covers(current, view) && view.zoom < current.zoom + 2 ? current : { ...padded(view), zoom: view.zoom }
       );
-    },
-  });
+    };
+    map.on("moveend", onMoveEnd);
+    return () => map.off("moveend", onMoveEnd);
+  }, [map]);
 
   useEffect(() => {
-    if (!map.getPane("grid")) {
-      const pane = map.createPane("grid");
-      pane.style.zIndex = 350; // above the tiles (200), below shapes (400)
-      pane.style.pointerEvents = "none";
-    }
     const area = drawn ?? { ...padded(viewOf(map)), zoom: map.getZoom() };
     const image = gridImage({ cells, meta, view: area, valueFor, colorFor, sigma, land: LAND_POLYGONS, blank, fill });
-    // Leaflet's SVG overlay places any element over an area of the map and
-    // stretches it along with zooms; here the element is the canvas itself.
+    // The canvas goes on the map as it is, its corners pinned to the area.
     // The new one goes on before the old one comes off, so nothing flickers.
-    const overlay = image && L.svgOverlay(image.canvas, image.bounds, { pane: "grid", opacity, interactive: false });
-    if (overlay) overlay.addTo(map);
-    if (shown.current) shown.current.remove();
-    shown.current = overlay;
+    const old = shown.current;
+    shown.current = null;
+    if (image) {
+      const id = `grid-${count.current++}`;
+      const [[south, west], [north, east]] = image.bounds;
+      map.addSource(id, {
+        type: "canvas",
+        canvas: image.canvas,
+        animate: false,
+        coordinates: [
+          [west, north],
+          [east, north],
+          [east, south],
+          [west, south],
+        ],
+      });
+      map.addLayer(
+        { id, type: "raster", source: id, paint: { "raster-opacity": opacity, "raster-fade-duration": 0 } },
+        "outside-mask"
+      );
+      shown.current = id;
+    }
+    if (old) {
+      map.removeLayer(old);
+      map.removeSource(old);
+    }
   }, [map, drawn, cells, meta, blank, fill, valueFor, colorFor, sigma, opacity]);
 
   // Take the image away when the layer goes.
   useEffect(
     () => () => {
-      if (shown.current) shown.current.remove();
+      if (shown.current) {
+        map.removeLayer(shown.current);
+        map.removeSource(shown.current);
+      }
       shown.current = null;
     },
-    []
+    [map]
   );
 
   return null;

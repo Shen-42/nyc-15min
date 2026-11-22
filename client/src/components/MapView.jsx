@@ -15,7 +15,7 @@ export default function MapView({ view, onChange, onPickBorough }) {
   const ref = useRef(null);
 
   // How far down the toolbar reaches, however many rows it wraps to, as
-  // --toolbar-space on the whole app: Leaflet's zoom buttons go below it,
+  // --toolbar-space on the whole app: the map's zoom buttons go below it,
   // and on phones the results sheet stops short of it (layout.css).
   useLayoutEffect(() => {
     const toolbar = ref.current;

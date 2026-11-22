@@ -6,7 +6,7 @@ How to run, test, rebuild, and deploy the project.
 
 | Part | Tools |
 | --- | --- |
-| Front end | React 19, Vite, Leaflet with react-leaflet, MapLibre GL (base map) through @maplibre/maplibre-gl-leaflet, Atkinson Hyperlegible font |
+| Front end | React 19, Vite, MapLibre GL (the map and everything drawn on it), Atkinson Hyperlegible font |
 | Back end | Python, FastAPI, NumPy and scipy (the graph and its search), Shapely, opening-hours-py |
 | Data | OpenStreetMap via OSMnx and the Overpass API; NYC Open Data for curb ramps |
 | Map tiles | Stadia Maps, OSM Bright style, as vector tiles |

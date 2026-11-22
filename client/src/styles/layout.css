@@ -25,7 +25,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 1100; /* above Leaflet's panes and controls */
+  z-index: 1100; /* above the map and its controls */
   /* 85% of the screen, but never over the map's buttons: on a short
      phone, or when the buttons wrap to two rows, it stops 8 px below
      them. --toolbar-space is measured in MapView.jsx. */

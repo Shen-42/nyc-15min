@@ -1,27 +1,7 @@
-/* Map layers. Leaflet draws shapes as SVG, and CSS can style them by class. */
+/* Map markers. The grey mask, the walk area and its starting dot are drawn
+   by MapLibre, with their colors in CityMap.jsx. */
 
-.outside-mask {
-  fill: #333;
-  fill-opacity: 0.35;
-  stroke: #666;
-  stroke-width: 1;
-}
-
-.walk-area {
-  fill: var(--color-walk);
-  fill-opacity: 0.12;
-  stroke: var(--color-walk);
-  stroke-width: 2;
-}
-
-.start-point {
-  fill: var(--color-walk);
-  fill-opacity: 1;
-  stroke: #fff;
-  stroke-width: 3;
-}
-
-/* Place markers. Leaflet positions .place-marker with a CSS transform,
+/* Place markers. MapLibre positions .place-marker with a CSS transform,
    so size changes go on the inner .glyph. */
 .place-marker .glyph {
   width: 22px;
@@ -72,9 +52,16 @@
   box-shadow: 0 0 0 1px var(--color-ink);
 }
 
+/* A marker's hover text: a small box above it, which never catches the pointer. */
 .place-tooltip {
+  pointer-events: none;
+}
+
+.place-tooltip .maplibregl-popup-content {
+  padding: 4px 8px;
   font-family: var(--font-body);
   font-size: var(--text-sm);
+  white-space: nowrap;
 }
 
 /* Corners with no listed curb ramp (card 11): a diamond, unlike the round
@@ -138,20 +125,22 @@
   box-shadow: 0 1px 4px rgb(31 36 48 / 0.25);
 }
 
-/* Leaflet's zoom buttons go under the toolbar. --toolbar-space is measured
+/* The zoom buttons go under the toolbar. --toolbar-space is measured
    in MapView.jsx. The map credit stays in the top right corner, above it. */
-.map-wrap .leaflet-top.leaflet-left {
+.map-wrap .maplibregl-ctrl-top-left {
   top: var(--toolbar-space, 0px);
 }
 
-/* Leaflet's credit box sits on one short line in the very top right
+/* The credit box sits on one short line in the very top right
    corner, and the toolbar starts just below it. */
 .map-wrap {
   --credit-height: 18px;
 }
 
-.map-wrap .leaflet-control-attribution {
+.map-wrap .maplibregl-ctrl-attrib {
   height: var(--credit-height);
+  margin: 0;
+  padding: 0 5px;
   font-size: 11px;
   line-height: var(--credit-height);
   white-space: nowrap;
@@ -169,11 +158,11 @@
     padding: 0 var(--space-2);
   }
 
-  .map-wrap .leaflet-control-attribution {
+  .map-wrap .maplibregl-ctrl-attrib {
     font-size: 10px;
   }
 
-  .map-wrap .leaflet-control-zoom {
+  .map-wrap .maplibregl-ctrl-group {
     display: none;
   }
 }
@@ -208,14 +197,14 @@
 
 /* .map-select ("Go to…") shares its look with the panel's menus: panel.css. */
 
-/* Before any tile has loaded, the map shows this instead of Leaflet's grey:
+/* Before any tile has loaded, the map shows this instead of a blank box:
    the land color of the OSM Bright tiles, so a gap reads as blank land. */
-.map-wrap .leaflet-container {
+.map-wrap .map {
   background: #f8f4f0;
 }
 
 /* Phones: smaller place markers, so a dense block doesn't turn into one
-   pile of circles. The marker's box keeps its size, since Leaflet anchors
+   pile of circles. The marker's box keeps its size, since MapLibre anchors
    it by the middle, and the glyph sits centered inside it. */
 @media (max-width: 767px) {
   .place-marker {
@@ -294,8 +283,8 @@
 }
 
 /* ---- A note at a spot that was turned away ("That's in Central Park") ---- */
-.map-note .leaflet-popup-content {
-  margin: var(--space-2) var(--space-6) var(--space-2) var(--space-3);
+.map-note .maplibregl-popup-content {
+  padding: var(--space-2) var(--space-6) var(--space-2) var(--space-3);
   font: inherit;
   font-size: var(--text-sm);
   line-height: 1.4;
