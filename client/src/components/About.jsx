@@ -29,8 +29,8 @@ export default function About({ open, onClose }) {
           or whether a place is accessible inside.
         </p>
         <p>
-          <a href="https://github.com/Shen-42/nyc-15min-info" target="_blank" rel="noreferrer">
-            How it works
+          <a href="https://github.com/Shen-42/nyc-15min" target="_blank" rel="noreferrer">
+            Source code and how it works, on GitHub
           </a>
         </p>
         <p>

@@ -1,4 +1,4 @@
-"""Download the map data the server needs from the GitHub Releases of the public nyc-15min-info repo (card 15).
+"""Download the map data the server needs from the repo's GitHub Releases (card 15).
 
 Run from the server folder (standard library only):
     python scripts/get_data.py
@@ -30,10 +30,9 @@ from pathlib import Path
 SERVER_DIR = Path(__file__).resolve().parent.parent
 DATA = SERVER_DIR / "data"
 RELEASE_FILE = SERVER_DIR / "data-release.json"
-# The code repo is private, so the data releases are in the public repo,
-# where anyone (and Render's build) can download them without a token.
-DATA_REPO = "Shen-42/nyc-15min-info"
-BASE_URL = f"https://github.com/{DATA_REPO}/releases/download"
+# On GitHub Actions this is set to the repo the job runs in.
+REPO = os.environ.get("GITHUB_REPOSITORY", "Shen-42/nyc-15min")
+BASE_URL = f"https://github.com/{REPO}/releases/download"
 # The files the server and the tests read.
 GRID_FILES = [f"grid-{b}.json" for b in ("bronx", "brooklyn", "manhattan", "queens", "staten-island")]
 FILES = ["walk_graph.npz", "amenities.json", "parks.json", "water.json", "waterways.json", "ramps.json", *GRID_FILES]

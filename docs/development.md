@@ -102,7 +102,7 @@ Open http://localhost:5173. In development, Vite forwards requests that start wi
 
 ## Rebuild the data
 
-The map data for the five boroughs is about 50 MB and replaced every month, so it isn't kept in git. It's in the GitHub releases of the public [nyc-15min-info](https://github.com/Shen-42/nyc-15min-info/releases) repo, and `server/data-release.json`, which is in git, names the release in use and each file's SHA-256 fingerprint. `server/scripts/get_data.py` downloads the files that are missing or different and checks each one; Render's build, the test job, and local setup all run it.
+The map data for the five boroughs is about 50 MB and replaced every month, so it isn't kept in git. It's in the repo's GitHub releases, and `server/data-release.json`, which is in git, names the release in use and each file's SHA-256 fingerprint. `server/scripts/get_data.py` downloads the files that are missing or different and checks each one; Render's build, the test job, and local setup all run it.
 
 A GitHub Actions job (`.github/workflows/refresh-data.yml`) rebuilds the data on the 1st of every month: it downloads everything again (OpenStreetMap from Overpass, curb ramps from NYC Open Data), checks that no count dropped by more than 15% (`server/scripts/check_data.py`), runs the tests, and scores the city grid again. Then it uploads the files as a new release (`data-YYYY-MM-DD-N`), commits `data-release.json` naming it, which makes Render redeploy both the API and the site, and deletes all but the three newest data releases. It takes about 4 hours, mostly waiting for Overpass. If it fails partway, **Re-run failed jobs** reuses the pieces it already downloaded. Its results table is on the run's summary page.
 

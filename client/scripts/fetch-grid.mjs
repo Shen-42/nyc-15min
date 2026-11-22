@@ -19,8 +19,7 @@ const RELEASE_FILE = join(CLIENT, "..", "server", "data-release.json");
 const SERVER_DATA = join(CLIENT, "..", "server", "data");
 const OUT = join(CLIENT, "public", "grid");
 const FILES = join(OUT, "files");
-// The data releases are in the public repo (the code repo is private).
-const REPO = "Shen-42/nyc-15min-info";
+const REPO = process.env.GITHUB_REPOSITORY || "Shen-42/nyc-15min";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
