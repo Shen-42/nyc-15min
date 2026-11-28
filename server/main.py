@@ -32,9 +32,9 @@ from hours import parse_at, status_at
 from modes import NO_RAMP_PENALTY_MIN, SPEEDS, load_no_ramp_nodes, parse_mode
 from rate_limit import RateLimited, RateLimiter, make_counter
 from scoring import parse_weights, score_walk, settings_with_weights
-from shared_cache import make_shared_cache
+from shared_cache import fingerprint, make_shared_cache
 from usage import make_usage
-from walk_area import NearestName, Outlines, big_land, empty_islands, in_open_ocean, load_waterways, water_phrase, load_boroughs, load_not_lived_on, load_parks, load_water, walking_area
+from walk_area import BOROUGHS_FILE, NearestName, Outlines, big_land, empty_islands, in_open_ocean, load_waterways, water_phrase, load_boroughs, load_not_lived_on, load_parks, load_water, walking_area
 
 GRAPH_FILE = Path(__file__).parent / "data" / "walk_graph.npz"
 WATER_FILE = Path(__file__).parent / "data" / "water.json"
@@ -83,8 +83,9 @@ grid = None
 # None without REDIS_URL.
 shared_cache = None
 
-# Part of every shared-cache key. Bump it when walk_area.py changes how
-# areas are drawn, so areas drawn the old way aren't served.
+# Part of every shared-cache key, with a fingerprint of the files an area is
+# drawn from. Bump it when walk_area.py changes how areas are drawn, so areas
+# drawn the old way aren't served.
 AREA_FORMAT = 2  # 2: drawn on a grid of squares (card 15)
 
 
@@ -148,7 +149,9 @@ async def lifespan(app):
         print(f"Loaded walking graph: {len(walk_graph):,} nodes, {walk_graph.edge_count:,} edges")
         empty_land = Outlines(empty_islands(walk_graph.lat, walk_graph.lng))
         print(f"Found {len(empty_land)} islands with no streets")
-        version = f"{AREA_FORMAT}-{walk_graph.meta.get('built')}-{len(walk_graph)}"
+        # The streets, the shoreline and lakes it's cut to, and the curb ramps
+        # (wheelchair searches). A refresh that changes any of them changes the key.
+        version = f"{AREA_FORMAT}-{fingerprint([GRAPH_FILE, WATER_FILE, BOROUGHS_FILE, RAMPS_FILE])}"
         shared_cache = make_shared_cache(redis_client, version)
     else:
         print(f"No walking graph at {GRAPH_FILE}. Run: python scripts/build_graph.py")

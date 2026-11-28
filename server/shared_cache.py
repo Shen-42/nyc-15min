@@ -10,7 +10,8 @@ The free Key Value instance has 25 MB, shared with the rate-limit counts.
 An area is gzipped to a few KB, and Redis drops the least recently used
 ones when it fills up (render.yaml sets maxmemoryPolicy: allkeys-lru).
 
-Each key includes the data version, so after the monthly refresh old areas
+Each key includes a fingerprint of every file an area is drawn from (see
+fingerprint), so after a data refresh that changes any of them, old areas
 are never served; they expire on their own after EXPIRE_DAYS.
 
 If Redis can't be reached, the area is just drawn again: a broken cache
@@ -18,6 +19,7 @@ shouldn't slow down or break searches.
 """
 
 import gzip
+import hashlib
 import json
 import time
 
@@ -64,6 +66,18 @@ class SharedCache:
         if self._last_warning is None or now - self._last_warning >= WARN_EVERY_S:
             self._last_warning = now
             print(f"Shared area cache unavailable, drawing areas again: {err}")
+
+
+def fingerprint(paths):
+    """A short hash of the files' contents, skipping any that don't exist.
+    Changes whenever any of them does."""
+    digest = hashlib.sha256()
+    for path in paths:
+        if path.exists():
+            with open(path, "rb") as f:
+                for block in iter(lambda: f.read(1 << 20), b""):
+                    digest.update(block)
+    return digest.hexdigest()[:12]
 
 
 def make_shared_cache(client, version):

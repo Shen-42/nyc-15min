@@ -1,4 +1,4 @@
-from shared_cache import EXPIRE_DAYS, SharedCache
+from shared_cache import EXPIRE_DAYS, SharedCache, fingerprint
 
 
 class FakeRedis:
@@ -54,3 +54,19 @@ def test_redis_down_means_no_cache_not_an_error(capsys):
     assert cache.get("walk:15.0:42") is None
     cache.set("walk:15.0:42", AREA)  # doesn't raise
     assert capsys.readouterr().out.count("unavailable") == 1  # warned once, not twice
+
+
+def test_fingerprint_changes_when_any_input_file_changes(tmp_path):
+    graph, water = tmp_path / "graph", tmp_path / "water"
+    graph.write_bytes(b"streets")
+    water.write_bytes(b"lakes")
+    before = fingerprint([graph, water])
+    assert fingerprint([graph, water]) == before
+    water.write_bytes(b"lakes, one more")
+    assert fingerprint([graph, water]) != before
+
+
+def test_fingerprint_skips_missing_files(tmp_path):
+    graph = tmp_path / "graph"
+    graph.write_bytes(b"streets")
+    assert fingerprint([graph, tmp_path / "no-ramps"]) == fingerprint([graph])
