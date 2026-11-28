@@ -13,7 +13,7 @@ setWorkerUrl(maplibreWorkerUrl);
 import { CITY_BOUNDS, CITY_CENTER, CITY_OUTLINE, OUTER_RING } from "../data/city";
 import BarrierMarkers from "./BarrierMarkers";
 import GridLayer from "./GridLayer";
-import MapMarker, { MapContext, useMap } from "./MapMarker";
+import MapMarker, { MapContext, useMap, useMapEvent } from "./MapMarker";
 import { CATEGORY_BY_ID } from "../data/categories";
 import { cellScore, heatColor, hexToRgb, inPark, isGap } from "../data/grid";
 import { smoothstep } from "../data/gridImage";
@@ -137,37 +137,25 @@ function FitTo({ target }) {
 // and once at the start, so it can load the grid for those boroughs.
 function ViewWatcher({ onViewChange }) {
   const map = useMap();
-  const latest = useRef(onViewChange);
-  latest.current = onViewChange;
-  useEffect(() => {
-    const report = () => {
-      const b = map.getBounds();
-      const c = map.getCenter();
-      latest.current({
-        bounds: [
-          [b.getSouth(), b.getWest()],
-          [b.getNorth(), b.getEast()],
-        ],
-        center: [c.lat, c.lng],
-      });
-    };
-    report();
-    map.on("moveend", report);
-    return () => map.off("moveend", report);
-  }, [map]);
+  const report = () => {
+    const b = map.getBounds();
+    const c = map.getCenter();
+    onViewChange({
+      bounds: [
+        [b.getSouth(), b.getWest()],
+        [b.getNorth(), b.getEast()],
+      ],
+      center: [c.lat, c.lng],
+    });
+  };
+  useMapEvent("moveend", report);
+  useEffect(report, [map]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
 
 // Runs onMapClick with [lat, lng] whenever the map is clicked.
 function ClickHandler({ onMapClick }) {
-  const map = useMap();
-  const latest = useRef(onMapClick);
-  latest.current = onMapClick;
-  useEffect(() => {
-    const onClick = (e) => latest.current([e.lngLat.lat, e.lngLat.lng]);
-    map.on("click", onClick);
-    return () => map.off("click", onClick);
-  }, [map]);
+  useMapEvent("click", (e) => onMapClick([e.lngLat.lat, e.lngLat.lng]));
   return null;
 }
 

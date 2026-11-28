@@ -1,10 +1,23 @@
-import { createContext, useContext, useEffect } from "react";
+import { createContext, useContext, useEffect, useRef } from "react";
 import { Marker, Popup } from "maplibre-gl";
 
 // The MapLibre map, for the pieces drawn on it (CityMap.jsx provides it once
 // the map's style has loaded, so layers can be added straight away).
 export const MapContext = createContext(null);
 export const useMap = () => useContext(MapContext);
+
+// Runs handler on every one of the map's `type` events, always the latest
+// handler, without taking the listener off and on again when it changes.
+export function useMapEvent(type, handler) {
+  const map = useMap();
+  const latest = useRef(handler);
+  latest.current = handler;
+  useEffect(() => {
+    const listener = (e) => latest.current(e);
+    map.on(type, listener);
+    return () => map.off(type, listener);
+  }, [map, type]);
+}
 
 // An HTML marker at [lat, lng]: an element with className and html, size
 // pixels square, centered on the spot. With a tooltip, it shows that text in

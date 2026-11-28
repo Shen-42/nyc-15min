@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useMap } from "./MapMarker";
+import { useMap, useMapEvent } from "./MapMarker";
 import { gridImage } from "../data/gridImage";
 import { LAND_POLYGONS } from "../data/city";
 
@@ -18,6 +18,12 @@ function padded(view) {
   const dLat = (view.north - view.south) * MARGIN;
   const dLng = (view.east - view.west) * MARGIN;
   return { south: view.south - dLat, west: view.west - dLng, north: view.north + dLat, east: view.east + dLng };
+}
+
+// An image's layer and source share its id.
+function removeImage(map, id) {
+  map.removeLayer(id);
+  map.removeSource(id);
 }
 
 const covers = (outer, inner) =>
@@ -42,16 +48,12 @@ export default function GridLayer({ cells, meta, blank, fill, valueFor, colorFor
 
   // moveend also follows every zoom. A new image is needed only if the
   // view has left the one on the map, or zoomed well into it.
-  useEffect(() => {
-    const onMoveEnd = () => {
-      const view = viewOf(map);
-      setDrawn((current) =>
-        current && covers(current, view) && view.zoom < current.zoom + 2 ? current : { ...padded(view), zoom: view.zoom }
-      );
-    };
-    map.on("moveend", onMoveEnd);
-    return () => map.off("moveend", onMoveEnd);
-  }, [map]);
+  useMapEvent("moveend", () => {
+    const view = viewOf(map);
+    setDrawn((current) =>
+      current && covers(current, view) && view.zoom < current.zoom + 2 ? current : { ...padded(view), zoom: view.zoom }
+    );
+  });
 
   useEffect(() => {
     const area = drawn ?? { ...padded(viewOf(map)), zoom: map.getZoom() };
@@ -80,19 +82,13 @@ export default function GridLayer({ cells, meta, blank, fill, valueFor, colorFor
       );
       shown.current = id;
     }
-    if (old) {
-      map.removeLayer(old);
-      map.removeSource(old);
-    }
+    if (old) removeImage(map, old);
   }, [map, drawn, cells, meta, blank, fill, valueFor, colorFor, sigma, opacity]);
 
   // Take the image away when the layer goes.
   useEffect(
     () => () => {
-      if (shown.current) {
-        map.removeLayer(shown.current);
-        map.removeSource(shown.current);
-      }
+      if (shown.current) removeImage(map, shown.current);
       shown.current = null;
     },
     [map]
