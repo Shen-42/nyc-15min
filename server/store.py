@@ -179,10 +179,9 @@ class SupabaseStore:
         return {k: row[k] for k in ("weights", "mode", "version", "updated_at")}
 
     def delete_user(self, user_id):
-        # The tables cascade from auth.users, but delete the rows first so
-        # nothing is left behind if the account deletion fails partway.
-        self._request("DELETE", "/rest/v1/saved_places", params={"user_id": f"eq.{user_id}"})
-        self._request("DELETE", "/rest/v1/profiles", params={"user_id": f"eq.{user_id}"})
+        # The tables cascade from auth.users (on delete cascade), so deleting
+        # the sign-in removes the saved places and profile in the same
+        # transaction: either all of it goes or none of it does.
         self._request("DELETE", f"/auth/v1/admin/users/{user_id}")
 
     def stats(self):

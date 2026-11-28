@@ -80,14 +80,11 @@ def test_counts_come_from_the_content_range_header():
     assert store.count_places(USER) == 17
 
 
-def test_deleting_a_user_removes_rows_then_the_sign_in():
+def test_deleting_a_user_deletes_only_the_sign_in():
+    # The tables cascade from auth.users, so one request removes everything at once.
     store, seen = make_store(lambda r: httpx.Response(200, json=[]))
     store.delete_user(USER)
-    assert [(r.method, r.url.path) for r in seen] == [
-        ("DELETE", "/rest/v1/saved_places"),
-        ("DELETE", "/rest/v1/profiles"),
-        ("DELETE", f"/auth/v1/admin/users/{USER}"),
-    ]
+    assert [(r.method, r.url.path) for r in seen] == [("DELETE", f"/auth/v1/admin/users/{USER}")]
 
 
 def test_outages_become_store_errors():
