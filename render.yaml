@@ -66,7 +66,7 @@ services:
     # vector tiles, fonts, and icons from Stadia and draws in a worker it
     # starts from a blob: URL. Anything else, such as a script
     # injected into the page, is blocked. 'unsafe-inline' for styles is
-    # needed by Leaflet and by React's style attributes; scripts get no such
+    # needed by React's style attributes; scripts get no such
     # exception. frame-ancestors 'none' stops other sites from framing it.
     # Supabase is named by project, not *.supabase.co, so a script can't send
     # data to someone else's project. Moving to a new project means
