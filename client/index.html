@@ -10,6 +10,11 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- The base map's style and tiles come from Stadia. Opening the
+         connection now, while the script downloads, saves a round trip or
+         two before the map can draw. crossorigin because MapLibre fetches
+         them with CORS. -->
+    <link rel="preconnect" href="https://tiles.stadiamaps.com" crossorigin />
   </head>
   <body>
     <div id="root"></div>

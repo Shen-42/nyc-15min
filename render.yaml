@@ -96,6 +96,13 @@ services:
       - path: /grid/index.json
         name: Cache-Control
         value: no-cache
+      # The site's scripts and styles. Vite puts a fingerprint in each name,
+      # so a new build gets new names and these can be kept for a year too.
+      # index.html, which names them, keeps the default and is checked on
+      # every visit.
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
     envVars:
       - key: NODE_VERSION
         value: "22"
