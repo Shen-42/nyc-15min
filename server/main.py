@@ -4,6 +4,7 @@ Run from this folder with:
     uvicorn main:app --reload --port 8000
 """
 
+import json
 import logging
 import os
 import resource
@@ -45,6 +46,10 @@ AMENITIES_FILE = Path(__file__).parent / "data" / "amenities.json"
 RAMPS_FILE = Path(__file__).parent / "data" / "ramps.json"
 DATA_DIR = Path(__file__).parent / "data"
 PARKS_FILE = Path(__file__).parent / "data" / "parks.json"
+# Names the map data release in use (scripts/get_data.py). Missing when
+# running on data built locally.
+RELEASE_FILE = Path(__file__).parent / "data-release.json"
+DATA_RELEASE = json.loads(RELEASE_FILE.read_text())["tag"] if RELEASE_FILE.exists() else None
 
 # Clicks farther than this from any street or path (the middle of a lake or a
 # rail yard) are turned away instead of starting from a far-off path.
@@ -275,7 +280,7 @@ def require_graph():
 @app.get("/api/health")
 def health():
     """Lets the front end check that the server is up."""
-    return {"status": "ok", "version": app.version, "graph_loaded": walk_graph is not None}
+    return {"status": "ok", "version": app.version, "data_release": DATA_RELEASE, "graph_loaded": walk_graph is not None}
 
 
 @app.get("/api/graph/info")

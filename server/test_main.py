@@ -11,6 +11,15 @@ def test_health():
     assert res.json()["status"] == "ok"
 
 
+def test_health_names_the_data_release():
+    import json
+
+    import main
+
+    tag = json.loads(main.RELEASE_FILE.read_text())["tag"] if main.RELEASE_FILE.exists() else None
+    assert client.get("/api/health").json()["data_release"] == tag
+
+
 def test_rate_limit_allows_normal_use_then_says_wait():
     import pytest
     from fastapi import HTTPException

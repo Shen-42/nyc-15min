@@ -12,7 +12,7 @@ All routes take `lat`, `lng`, and optionally `minutes` (default 15, at most 30).
 | `GET /api/nearest-node` | The graph node closest to a point |
 | `GET /api/nearest-street` | The nearest street point a search would accept: on land, outside parks, lakes, and islands where nobody lives (404 if none within about 1 km) |
 | `GET /api/graph/info` | Node and segment counts |
-| `GET /api/health` | Whether the server is up and the graph is loaded |
+| `GET /api/health` | Whether the server is up and the graph is loaded, and `data_release`, the tag of the map data release in use (`null` on locally built data) |
 | `GET /api/me` | The signed-in user's id, email, and role |
 | `GET`, `POST /api/saved-places`; `DELETE /api/saved-places/{id}` | The signed-in user's saved places (at most 50) |
 | `GET`, `PUT /api/profile` | The signed-in user's needs profile; `PUT` names the version it started from and gets 409 if it's out of date |
