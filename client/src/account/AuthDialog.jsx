@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Dialog from "./Dialog";
 import Field from "./Field";
 import { authMessage } from "./errors";
-import { supabase } from "./supabase";
+import { loadSupabase } from "./supabase";
 
 const MIN_PASSWORD = 8;
 
@@ -60,6 +60,7 @@ export default function AuthDialog({ open, onClose, reason, recovering, onRecove
 
     setBusy(true);
     try {
+      const supabase = await loadSupabase();
       if (mode === "signIn") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
@@ -92,6 +93,9 @@ export default function AuthDialog({ open, onClose, reason, recovering, onRecove
         onRecovered();
         onClose();
       }
+    } catch (err) {
+      // Supabase's code couldn't be downloaded (supabase.js).
+      setErrors({ form: authMessage(err) });
     } finally {
       setBusy(false);
     }
@@ -99,7 +103,9 @@ export default function AuthDialog({ open, onClose, reason, recovering, onRecove
 
   async function resend() {
     setBusy(true);
-    const { error } = await supabase.auth.resend({ type: "signup", email, options: { emailRedirectTo: redirectTo } });
+    const { error } = await loadSupabase()
+      .then((supabase) => supabase.auth.resend({ type: "signup", email, options: { emailRedirectTo: redirectTo } }))
+      .catch((err) => ({ error: err }));
     setBusy(false);
     if (error) return setErrors({ form: authMessage(error) });
     setSentTo({ email, what: "confirm" });

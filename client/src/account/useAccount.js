@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { supabase } from "./supabase";
+import { authEnabled, loadSupabase, neededAtStart, supabaseReady } from "./supabase";
 
 // Who is signed in, and a fetch that sends their token (card 13).
 //
@@ -15,14 +15,28 @@ export function useAccount() {
   const [recovering, setRecovering] = useState(false);
   const [notice, setNotice] = useState(null);
 
+  // Supabase loads now only if it's needed at once (supabase.js); otherwise
+  // when the sign-in dialog first uses it. Either way, follow the session
+  // from then on.
   useEffect(() => {
-    if (!supabase) return;
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = supabase.auth.onAuthStateChange((event, next) => {
-      setSession(next);
-      if (event === "PASSWORD_RECOVERY") setRecovering(true);
+    if (!authEnabled) return;
+    // If it can't be downloaded, the visitor shows as signed out, and
+    // signing in tries again.
+    if (neededAtStart()) loadSupabase().catch(() => {});
+    let subscription = null;
+    let current = true;
+    supabaseReady.then((supabase) => {
+      if (!current) return;
+      supabase.auth.getSession().then(({ data }) => setSession(data.session));
+      ({ data: { subscription } } = supabase.auth.onAuthStateChange((event, next) => {
+        setSession(next);
+        if (event === "PASSWORD_RECOVERY") setRecovering(true);
+      }));
     });
-    return () => data.subscription.unsubscribe();
+    return () => {
+      current = false;
+      subscription?.unsubscribe();
+    };
   }, []);
 
   // Sends the request with the current token. If the server says the token
@@ -38,6 +52,7 @@ export function useAccount() {
           Authorization: `Bearer ${token}`,
         },
       });
+    const supabase = await loadSupabase();
     const { data } = await supabase.auth.getSession();
     if (!data.session) throw new Error("Sign in to continue.");
     let res = await send(data.session.access_token);
@@ -69,7 +84,7 @@ export function useAccount() {
   }, [userId, authFetch]);
 
   return {
-    enabled: Boolean(supabase),
+    enabled: authEnabled,
     session,
     user,
     authFetch,
@@ -77,6 +92,6 @@ export function useAccount() {
     endRecovery: () => setRecovering(false),
     notice,
     setNotice,
-    signOut: () => supabase.auth.signOut(),
+    signOut: () => loadSupabase().then((supabase) => supabase.auth.signOut()),
   };
 }
